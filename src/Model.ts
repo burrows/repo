@@ -1,5 +1,4 @@
-export type ModelState = 'empty' | 'loaded';
-// | 'new'
+export type ModelState = 'new' | 'empty' | 'loaded';
 // | 'getting'
 // | 'creating'
 // | 'updating'
@@ -16,9 +15,9 @@ interface Relations {
 }
 
 interface ModelNewOpts {
-  state: ModelState;
-  attributes: Record<string, unknown>;
-  relations: Relations;
+  state?: ModelState;
+  attributes?: Record<string, unknown>;
+  relations?: Relations;
 }
 
 export interface ModelClass<M> extends Function {
@@ -39,10 +38,10 @@ export default class Model<A extends BaseAttributes = {id: number}> {
 
   static relations: ModelClass<Model>['relations'] = {};
 
-  constructor(opts: ModelNewOpts) {
-    this.state = opts.state;
-    this.attributes = opts.attributes as A; // FIXME: validate attributes
-    this.relations = opts.relations;
+  constructor({state = 'new', attributes = {}, relations}: ModelNewOpts = {}) {
+    this.state = state;
+    this.attributes = attributes as A; // FIXME: validate attributes
+    this.relations = relations || this.defaultRelations();
   }
 
   get ctor(): ModelClass<this> {
@@ -71,5 +70,22 @@ export default class Model<A extends BaseAttributes = {id: number}> {
     relations = this.relations,
   }: Partial<ModelNewOpts> = {}): this {
     return new this.ctor({state, attributes, relations});
+  }
+
+  private defaultRelations(): Relations {
+    const relations: Relations = {};
+
+    for (const relationName in this.ctor.relations) {
+      switch (this.ctor.relations[relationName].cardinality) {
+        case 'many':
+          relations[relationName] = [];
+          break;
+        case 'one':
+          relations[relationName] = null;
+          break;
+      }
+    }
+
+    return relations;
   }
 }
