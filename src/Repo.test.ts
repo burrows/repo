@@ -1,4 +1,3 @@
-import util from 'util';
 import {FromSchema} from 'json-schema-to-ts';
 import Repo from './Repo';
 import Model from './Model';
@@ -13,9 +12,7 @@ const PostAttributesSchema = {
   },
 } as const;
 
-type PostAttributes = FromSchema<typeof PostAttributesSchema>;
-
-class Post extends Model<PostAttributes> {
+class Post extends Model<FromSchema<typeof PostAttributesSchema>> {
   static get relations() {
     return {
       author: {
@@ -51,9 +48,7 @@ const AuthorAttributesSchema = {
   },
 } as const;
 
-type AuthorAttributes = FromSchema<typeof AuthorAttributesSchema>;
-
-class Author extends Model<AuthorAttributes> {
+class Author extends Model<FromSchema<typeof AuthorAttributesSchema>> {
   static get relations() {
     return {
       posts: {
@@ -88,9 +83,7 @@ const CommentAttributesSchema = {
   },
 } as const;
 
-type CommentAttributes = FromSchema<typeof CommentAttributesSchema>;
-
-class Comment extends Model<CommentAttributes> {
+class Comment extends Model<FromSchema<typeof CommentAttributesSchema>> {
   static get relations() {
     return {
       author: {
@@ -115,64 +108,178 @@ class Comment extends Model<CommentAttributes> {
   }
 }
 
-let repo = new Repo().load(Post, [
-  {
-    id: 1,
-    title: 'First Post!',
-    author: {id: 9, firstName: 'Homer', lastName: 'Simpson'},
-    comments: [
-      {id: 100, text: 'a'},
-      {id: 105, text: 'b'},
-      {id: 109, text: 'c'},
-    ],
-  },
-  {
-    id: 2,
-    title: 'Hello World',
-    author: {id: 10, firstName: 'Marge', lastName: 'Simpson'},
-    comments: [
-      {id: 102, text: 'd'},
-      {id: 104, text: 'e'},
-      {id: 111, text: 'f'},
-    ],
-  },
-  {
-    id: 3,
-    title: 'Second Post!',
-    author: {id: 9, firstName: 'Homer', lastName: 'Simpson'},
-    comments: [],
-  },
-]);
+describe('Repo#load', () => {
+  describe('with records containing no relations', () => {
+    it('loads a single model', () => {
+      const r = new Repo().load(Post, {id: 1, title: 'a'});
+      const p = r.getModel(Post, 1);
 
-const p = repo.getModel(Post, 2)!;
-console.log(p.author);
-console.log(p.author!.posts.includes(p));
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+      expect(p!.id).toBe(1);
+      expect(p!.attributes.title).toBe('a');
+    });
 
-// console.log('1:');
-// console.log(util.inspect(repo, {depth: null}));
+    it('loads a multiple models', () => {
+      const r = new Repo().load(Author, [
+        {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+        {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+        {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+        {id: 4, firstName: 'Lisa', lastName: 'Simpson'},
+      ]);
 
-// repo = repo.load(Post, [
-//   {
-//     id: 1,
-//     text: 'First Post!',
-//     author: 10,
-//   },
-// ]);
-//
-// console.log('2:');
-// console.log(util.inspect(repo, {depth: 4}));
+      let a = r.getModel(Author, 1);
 
-// repo = repo.load(Post, [
-//   {
-//     id: 1,
-//     title: 'First Post!',
-//     author: {id: 9, firstName: 'Homer', lastName: 'Simpson'},
-//     comments: [
-//       {id: 100, text: 'a'},
-//       {id: 105, text: 'b'},
-//     ],
-//   },
-// ]);
-//
-// console.log('2:');
-// console.log(util.inspect(repo, {depth: 3}));
+      expect(a instanceof Author).toBe(true);
+      expect(a!.state).toBe('loaded');
+      expect(a!.id).toBe(1);
+      expect(a!.attributes.firstName).toBe('Homer');
+
+      a = r.getModel(Author, 4);
+
+      expect(a instanceof Author).toBe(true);
+      expect(a!.state).toBe('loaded');
+      expect(a!.id).toBe(4);
+      expect(a!.attributes.firstName).toBe('Lisa');
+    });
+  });
+
+  describe('with records containing nested related records', () => {
+    it('loads the given model and its related models', () => {
+      const r = new Repo().load(Post, {
+        id: 1,
+        title: 'post 1',
+        author: {
+          id: 10,
+          firstName: 'Homer',
+          lastName: 'Simpson',
+        },
+        comments: [
+          {
+            id: 1,
+            text: 'comment 1',
+            author: {id: 20, firstName: 'Marge', lastName: 'Simpson'},
+          },
+          {
+            id: 2,
+            text: 'comment 2',
+            author: {id: 30, firstName: 'Bart', lastName: 'Simpson'},
+          },
+          {
+            id: 3,
+            text: 'comment 3',
+            author: {id: 20, firstName: 'Marge', lastName: 'Simpson'},
+          },
+          {
+            id: 4,
+            text: 'comment 4',
+            author: {id: 10, firstName: 'Homer', lastName: 'Simpson'},
+          },
+        ],
+      });
+
+      const p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+      expect(p!.id).toBe(1);
+      expect(p!.attributes.title).toBe('post 1');
+
+      expect(p!.author instanceof Author).toBe(true);
+      expect(p!.author!.state).toBe('loaded');
+      expect(p!.author!.id).toBe(10);
+      expect(p!.author!.attributes.firstName).toBe('Homer');
+      expect(Array.isArray(p!.author!.posts)).toBe(true);
+      expect(p!.author!.posts!.includes(p!)).toBe(true);
+
+      expect(Array.isArray(p!.comments)).toBe(true);
+      expect(p!.comments![0] instanceof Comment).toBe(true);
+      expect(p!.comments![0].state).toBe('loaded');
+      expect(p!.comments![0].id).toBe(1);
+      expect(p!.comments![0].attributes.text).toBe('comment 1');
+      expect(p!.comments![0].author instanceof Author).toBe(true);
+      expect(p!.comments![0].author!.id).toBe(20);
+      expect(p!.comments![0].author!.attributes.firstName).toBe('Marge');
+      expect(p!.comments![0].post).toBe(p);
+
+      expect(p!.comments![1] instanceof Comment).toBe(true);
+      expect(p!.comments![1].state).toBe('loaded');
+      expect(p!.comments![1].id).toBe(2);
+      expect(p!.comments![1].attributes.text).toBe('comment 2');
+      expect(p!.comments![1].author instanceof Author).toBe(true);
+      expect(p!.comments![1].author!.id).toBe(30);
+      expect(p!.comments![1].author!.attributes.firstName).toBe('Bart');
+      expect(p!.comments![1].post).toBe(p);
+
+      expect(p!.comments![2] instanceof Comment).toBe(true);
+      expect(p!.comments![2].state).toBe('loaded');
+      expect(p!.comments![2].id).toBe(3);
+      expect(p!.comments![2].attributes.text).toBe('comment 3');
+      expect(p!.comments![2].author instanceof Author).toBe(true);
+      expect(p!.comments![2].author!.id).toBe(20);
+      expect(p!.comments![2].author!.attributes.firstName).toBe('Marge');
+      expect(p!.comments![2].author).toBe(p!.comments[0].author);
+      expect(p!.comments![2].post).toBe(p);
+
+      expect(p!.comments![3] instanceof Comment).toBe(true);
+      expect(p!.comments![3].state).toBe('loaded');
+      expect(p!.comments![3].id).toBe(4);
+      expect(p!.comments![3].attributes.text).toBe('comment 4');
+      expect(p!.comments![3].author instanceof Author).toBe(true);
+      expect(p!.comments![3].author!.id).toBe(10);
+      expect(p!.comments![3].author!.attributes.firstName).toBe('Homer');
+      expect(p!.comments![3].author).toBe(p!.author);
+      expect(p!.comments![3].post).toBe(p);
+
+      const homer = r.getModel(Author, 10);
+      const marge = r.getModel(Author, 20);
+
+      expect(homer instanceof Author).toBe(true);
+      expect(homer!.state).toBe('loaded');
+      expect(Array.isArray(homer!.posts)).toBe(true);
+      expect(homer!.posts).toEqual([p]);
+      expect(Array.isArray(homer!.comments)).toBe(true);
+      expect(homer!.comments).toEqual([p!.comments[3]]);
+
+      expect(marge instanceof Author).toBe(true);
+      expect(marge!.state).toBe('loaded');
+      expect(Array.isArray(marge!.posts)).toBe(true);
+      expect(marge!.posts).toEqual([]);
+      expect(Array.isArray(marge!.comments)).toBe(true);
+      expect(marge!.comments).toEqual([p!.comments[0], p!.comments[2]]);
+    });
+
+    it('loads empty related models', () => {
+      const r = new Repo().load(Post, {
+        id: 1,
+        title: 'post 1',
+        author: {id: 10},
+        comments: [1, 2, 3, 4],
+      });
+
+      const a = r.getModel(Author, 10);
+      const c = r.getModel(Comment, 1);
+      const p = r.getModel(Post, 1);
+
+      expect(a instanceof Author).toBe(true);
+      expect(a!.id).toBe(10);
+      expect(a!.state).toBe('empty');
+      expect(a!.attributes).toEqual({id: 10});
+      expect(a!.posts).toEqual([p]);
+
+      expect(c instanceof Comment).toBe(true);
+      expect(c!.id).toBe(1);
+      expect(c!.state).toBe('empty');
+      expect(c!.attributes).toEqual({id: 1});
+      expect(c!.post).toBe(p);
+
+      expect(p instanceof Post).toBe(true);
+      expect(p!.id).toBe(1);
+      expect(p!.author instanceof Author).toBe(true);
+      expect(p!.author!.id).toBe(10);
+      expect(p!.author!).toBe(a);
+      expect(Array.isArray(p!.comments)).toBe(true);
+      expect(p!.comments![0].id).toBe(1);
+      expect(p!.comments![0]).toBe(c);
+    });
+  });
+});
