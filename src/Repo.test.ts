@@ -1,6 +1,7 @@
 import {FromSchema} from 'json-schema-to-ts';
 import Repo from './Repo';
 import Model from './Model';
+import Query from './Query';
 
 const PostAttributesSchema = {
   type: 'object',
@@ -281,5 +282,56 @@ describe('Repo#load', () => {
       expect(p!.comments![0].id).toBe(1);
       expect(p!.comments![0]).toBe(c);
     });
+  });
+
+  describe('with queries present', () => {
+    it('updates the queries that contain the newly loaded models', () => {
+      let r = new Repo().loadQuery(Author, {x: 1}, [
+        {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+        {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+      ]);
+
+      r = r.loadQuery(Author, {x: 2}, [
+        {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+        {id: 4, firstName: 'Lisa', lastName: 'Simpson'},
+      ]);
+
+      r = r.load(Post, {
+        id: 1,
+        title: 'a',
+        author: {id: 3, firstName: 'Bartholomew', lastName: 'Simpson'},
+      });
+
+      const q = r.getQuery(Author, {x: 1})!;
+      const a = q.models.find(m => m.id === 3);
+
+      expect(a instanceof Author).toBe(true);
+      expect(a!.attributes.firstName).toBe('Bartholomew');
+      expect(a!.attributes.lastName).toBe('Simpson');
+    });
+  });
+});
+
+describe('Repo#loadQuery', () => {
+  it('loads the models and assigns them to a Query object', () => {
+    const r = new Repo().loadQuery(Author, {}, [
+      {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+      {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+      {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+    ]);
+
+    const as = r.getQuery(Author, {});
+
+    expect(as instanceof Query).toBe(true);
+    expect(as!.models.length).toBe(3);
+    expect(as!.models[0] instanceof Author).toBe(true);
+    expect(as!.models[0]!.id).toBe(1);
+    expect(as!.models[0]!.attributes.firstName).toBe('Homer');
+    expect(as!.models[1] instanceof Author).toBe(true);
+    expect(as!.models[1]!.id).toBe(2);
+    expect(as!.models[1]!.attributes.firstName).toBe('Marge');
+    expect(as!.models[2] instanceof Author).toBe(true);
+    expect(as!.models[2]!.id).toBe(3);
+    expect(as!.models[2]!.attributes.firstName).toBe('Bart');
   });
 });

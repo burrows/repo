@@ -1,4 +1,6 @@
+import hash from 'object-hash';
 import Model, {ModelClass} from './Model';
+import Query from './Query';
 
 // models:
 //   {
@@ -15,50 +17,56 @@ import Model, {ModelClass} from './Model';
 //
 // relations:
 //   {
-//     'Post:1': {
-//       author: 'Author:1',
-//       comments: ['Comment:1', 'Comment:2']
-//     },
-//     'Post:2': {
-//       author: 'Author:1',
-//       comments: ['Comment:3', 'Comment:4']
-//     },
-//     'Comment:1': {
-//       post: 'Post:1',
-//       author: 'Author:2',
-//     },
-//     'Comment:2': {
-//       post: 'Post:1',
-//       author: 'Author:3',
-//     },
-//     'Comment:3': {
-//       post: 'Post:2',
-//       author: 'Author:2',
-//     },
-//     'Comment:4': {
-//       post: 'Post:2',
-//       author: 'Author:3',
-//     },
-//     'Author:1': {
-//       posts: ['Post:1', 'Post:2'],
-//       comments: [],
-//     },
-//     'Author:2': {
-//       posts: [],
-//       comments: ['Comment:1', 'Comment:2'3,
-//     },
-//     'Author:3': {
-//       posts: [],
-//       comments: ['Comment:2', 'Comment:4'],
-//     },
+//     'Post:1:author': 'Author:1',
+//     'Post:1:comments': ['Comment:1', 'Comment:2'],
+//     'Post:2:author': 'Author:1',
+//     'Post:2:comments': ['Comment:3', 'Comment:4'],
+//     'Comment:1:post': 'Post:1',
+//     'Comment:1:author': 'Author:2',
+//     'Comment:2:post': 'Post:1',
+//     'Comment:2:author': 'Author:3',
+//     'Comment:3:post': 'Post:2',
+//     'Comment:3:author': 'Author:2',
+//     'Comment:4:post': 'Post:2',
+//     'Comment:4:author': 'Author:3',
+//     'Author:1:posts': ['Post:1', 'Post:2'],
+//     'Author:1:comments': [],
+//     'Author:2:posts': [],
+//     'Author:2:comments': ['Comment:1', 'Comment:2'3,
+//     'Author:3:posts': [],
+//     'Author:3:comments': ['Comment:2', 'Comment:4'],
+//   }
+//
+// queries:
+//   {
+//     'Post:<hash1>': Query<Post>({options: {...}, models: [...], ...}),
+//     'Post:<hash2>': Query<Post>({options: {...}, models: [...], ...}),
+//   }
+//
+// results:
+//   {
+//     'Post:1': {'Post:<hash1>': true},
+//     'Post:2': {'Post:<hash1>': true},
+//     'Post:3': {'Post:<hash1>': true},
+//     'Post:10': {'Post:<hash2>': true},
+//     'Post:11': {'Post:<hash2>': true},
+//     'Post:12': {'Post:<hash2>': true},
 //   }
 
 interface ModelMap {
   [key: string]: Model;
 }
 
+interface QueryMap {
+  [key: string]: Query<Model>;
+}
+
 interface RelationMap {
   [key: string]: string[] | string | null;
+}
+
+interface ResultMap {
+  [key: string]: {[key: string]: true};
 }
 
 type Loadable = {id: string | number};
@@ -78,27 +86,51 @@ export default class Repo {
   constructor(
     private models: ModelMap = {},
     private relations: RelationMap = {},
+    private queries: QueryMap = {},
+    private results: ResultMap = {},
   ) {}
 
+  loadQuery<M extends Model>(
+    modelClass: ModelClass<M>,
+    options: Record<string, unknown>,
+    records: Record<string, unknown>[],
+    // TODO: paging options?
+  ): Repo {
+    let repo = this.load(modelClass, records);
+
+    const models = records.map(
+      r => repo.getModel(modelClass, r.id as M['id'])!,
+    );
+    const queries = {...this.queries};
+    const results = {...this.results};
+
+    const queryId = `${modelClass.name}:${hash(options)}`;
+    let query = this.queries[queryId];
+
+    if (!query) {
+      query = new Query(modelClass, {state: 'loaded', options, models});
+    } else {
+      query = query.update({state: 'loaded', models});
+    }
+
+    queries[queryId] = query;
+
+    for (const model of models) {
+      results[model.key] = results[model.key] || {};
+      results[model.key][queryId] = true;
+    }
+
+    return new Repo(repo.models, repo.relations, queries, results);
+  }
+
   // Loads the given records into the repo.
-  //
-  // Two passes:
-  //   first pass:
-  //     upsert received record and related records
-  //     update relations as we go
-  //   second pass:
-  //     for each upserted record, traverse relations, updating model references
-  //
-  // Upsert model for each record
-  // Upsert model for each detected related record
-  //
-  //
   load<M extends Model>(
     klass: ModelClass<M>,
     records: Record<string, unknown> | Record<string, unknown>[],
   ): Repo {
     const models = {...this.models};
     const relations = {...this.relations};
+    const queries = {...this.queries};
     const updated: {[key: string]: Model} = {};
 
     const queue = Array.isArray(records)
@@ -297,6 +329,16 @@ export default class Repo {
         model = models[model.key] = updated[model.key] = model.update();
       }
 
+      if (this.results[model.key]) {
+        for (const queryId of Object.keys(this.results[model.key])) {
+          let query = queries[queryId];
+          query = query.update({
+            models: query.models.map(m => (m.id === model!.id ? model! : m)),
+          });
+          queries[queryId] = query;
+        }
+      }
+
       for (const relationName in model.ctor.relations) {
         const relation = model.ctor.relations[relationName];
 
@@ -339,7 +381,7 @@ export default class Repo {
       }
     }
 
-    return new Repo(models, relations);
+    return new Repo(models, relations, queries, this.results);
   }
 
   getModel<M extends Model>(
@@ -347,5 +389,13 @@ export default class Repo {
     id: M['id'],
   ): M | undefined {
     return this.models[`${modelClass.name}|${id}`] as M;
+  }
+
+  getQuery<M extends Model>(
+    modelClass: ModelClass<M>,
+    options: Record<string, unknown>,
+  ): Query<M> | undefined {
+    const queryId = `${modelClass.name}:${hash(options)}`;
+    return this.queries[queryId] as Query<M>;
   }
 }

@@ -68,7 +68,7 @@ export default class Model<A extends BaseAttributes = {id: number}> {
     state = this.state,
     attributes = this.attributes as Record<string, unknown>,
     relations = this.relations,
-  }: Partial<ModelNewOpts> = {}): this {
+  }: ModelNewOpts = {}): this {
     return new this.ctor({state, attributes, relations});
   }
 
