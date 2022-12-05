@@ -303,7 +303,7 @@ describe('Repo#load', () => {
       });
 
       const q = r.getQuery(Author, {x: 1})!;
-      const a = q.models.find(m => m.id === 3);
+      const a = q.models.find(m => m?.id === 3);
 
       expect(a instanceof Author).toBe(true);
       expect(a!.attributes.firstName).toBe('Bartholomew');
@@ -333,5 +333,73 @@ describe('Repo#loadQuery', () => {
     expect(as!.models[2] instanceof Author).toBe(true);
     expect(as!.models[2]!.id).toBe(3);
     expect(as!.models[2]!.attributes.firstName).toBe('Bart');
+  });
+
+  describe('with paging parameters', () => {
+    it('creates a sparse array', () => {
+      let r = new Repo().loadQuery(
+        Author,
+        {},
+        [
+          {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+          {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+          {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+        ],
+        {page: 0, pageSize: 3, count: 10},
+      );
+
+      let as = r.getQuery(Author, {});
+      expect(as instanceof Query).toBe(true);
+      expect(as!.models.length).toBe(10);
+      expect(as!.models[0] instanceof Author).toBe(true);
+      expect(as!.models[0]!.id).toBe(1);
+      expect(as!.models[0]!.attributes.firstName).toBe('Homer');
+      expect(as!.models[1] instanceof Author).toBe(true);
+      expect(as!.models[1]!.id).toBe(2);
+      expect(as!.models[1]!.attributes.firstName).toBe('Marge');
+      expect(as!.models[2] instanceof Author).toBe(true);
+      expect(as!.models[2]!.id).toBe(3);
+      expect(as!.models[2]!.attributes.firstName).toBe('Bart');
+      for (let i = 3; i <= 9; i++) {
+        expect(as!.models[i]).toBeUndefined();
+      }
+
+      r = r.loadQuery(
+        Author,
+        {},
+        [
+          {id: 7, firstName: 'Ned', lastName: 'Flanders'},
+          {id: 8, firstName: 'Maude', lastName: 'Flanders'},
+          {id: 9, firstName: 'Chief', lastName: 'Wiggum'},
+        ],
+        {page: 2, pageSize: 3, count: 10},
+      );
+
+      as = r.getQuery(Author, {});
+      expect(as instanceof Query).toBe(true);
+      expect(as!.models.length).toBe(10);
+      expect(as!.models[0] instanceof Author).toBe(true);
+      expect(as!.models[0]!.id).toBe(1);
+      expect(as!.models[0]!.attributes.firstName).toBe('Homer');
+      expect(as!.models[1] instanceof Author).toBe(true);
+      expect(as!.models[1]!.id).toBe(2);
+      expect(as!.models[1]!.attributes.firstName).toBe('Marge');
+      expect(as!.models[2] instanceof Author).toBe(true);
+      expect(as!.models[2]!.id).toBe(3);
+      expect(as!.models[2]!.attributes.firstName).toBe('Bart');
+      expect(as!.models[3]).toBeUndefined();
+      expect(as!.models[4]).toBeUndefined();
+      expect(as!.models[5]).toBeUndefined();
+      expect(as!.models[6] instanceof Author).toBe(true);
+      expect(as!.models[6]!.id).toBe(7);
+      expect(as!.models[6]!.attributes.firstName).toBe('Ned');
+      expect(as!.models[7] instanceof Author).toBe(true);
+      expect(as!.models[7]!.id).toBe(8);
+      expect(as!.models[7]!.attributes.firstName).toBe('Maude');
+      expect(as!.models[8] instanceof Author).toBe(true);
+      expect(as!.models[8]!.id).toBe(9);
+      expect(as!.models[8]!.attributes.firstName).toBe('Chief');
+      expect(as!.models[9]).toBeUndefined();
+    });
   });
 });

@@ -94,28 +94,56 @@ export default class Repo {
     modelClass: ModelClass<M>,
     options: Record<string, unknown>,
     records: Record<string, unknown>[],
-    // TODO: paging options?
+    paging?: {page: number; pageSize: number; count: number},
   ): Repo {
     let repo = this.load(modelClass, records);
-
-    const models = records.map(
+    const loadedModels = records.map(
       r => repo.getModel(modelClass, r.id as M['id'])!,
     );
+
     const queries = {...this.queries};
     const results = {...this.results};
 
     const queryId = `${modelClass.name}:${hash(options)}`;
-    let query = this.queries[queryId];
+    let query = this.queries[queryId] as Query<M>;
 
     if (!query) {
-      query = new Query(modelClass, {state: 'loaded', options, models});
+      let models = loadedModels;
+
+      if (paging) {
+        models = [];
+        models.length = paging.count;
+        models.splice(
+          paging.page * paging.pageSize,
+          loadedModels.length,
+          ...loadedModels,
+        );
+      }
+
+      query = new Query(modelClass, {
+        state: 'loaded',
+        options,
+        pageSize: paging?.pageSize,
+        models,
+      });
     } else {
+      let models: (M | undefined)[] = loadedModels;
+
+      if (paging) {
+        models = query.models.slice();
+        models.splice(
+          paging.page * paging.pageSize,
+          loadedModels.length,
+          ...loadedModels,
+        );
+      }
+
       query = query.update({state: 'loaded', models});
     }
 
     queries[queryId] = query;
 
-    for (const model of models) {
+    for (const model of loadedModels) {
       results[model.key] = results[model.key] || {};
       results[model.key][queryId] = true;
     }
@@ -333,7 +361,7 @@ export default class Repo {
         for (const queryId of Object.keys(this.results[model.key])) {
           let query = queries[queryId];
           query = query.update({
-            models: query.models.map(m => (m.id === model!.id ? model! : m)),
+            models: query.models.map(m => (m?.id === model!.id ? model! : m)),
           });
           queries[queryId] = query;
         }
