@@ -1,5 +1,5 @@
 import {FromSchema} from 'json-schema-to-ts';
-import Repo from './Repo';
+import Repo, {MapperAction} from './Repo';
 import Model from './Model';
 import Query from './Query';
 
@@ -13,7 +13,24 @@ const PostAttributesSchema = {
   },
 } as const;
 
+const PostMapper = {
+  fetch(id: number, _options: Record<string, unknown>) {
+    switch (id) {
+      case 1:
+        return Promise.resolve({id: 1, title: 'First Post!'});
+      case 2:
+        return Promise.resolve({id: 1, title: 'Second Post!'});
+      case 3:
+        return Promise.resolve({id: 1, title: 'Third Post!'});
+      default:
+        return Promise.reject(new Error('boom'));
+    }
+  },
+};
+
 class Post extends Model<FromSchema<typeof PostAttributesSchema>> {
+  static mapper = PostMapper;
+
   static get relations() {
     return {
       author: {
@@ -401,5 +418,31 @@ describe('Repo#loadQuery', () => {
       expect(as!.models[8]!.attributes.firstName).toBe('Chief');
       expect(as!.models[9]).toBeUndefined();
     });
+  });
+});
+
+describe('Repo#fetch', () => {
+  it(`adds an empty model and returns a RepoAction that calls the mapper's fetch method`, async () => {
+    let r = new Repo();
+    let a: MapperAction;
+
+    [r, a] = r.fetch(Post, 1);
+
+    let p = r.getModel(Post, 1);
+
+    expect(p instanceof Post).toBe(true);
+    expect(p!.id).toBe(1);
+    expect(p!.state).toBe('empty');
+    expect(p!.attributes).toEqual({id: 1});
+
+    const result = await a();
+
+    r = r.processMapperResult(result);
+
+    p = r.getModel(Post, 1);
+    expect(p instanceof Post).toBe(true);
+    expect(p!.id).toBe(1);
+    expect(p!.state).toBe('loaded');
+    expect(p!.attributes).toEqual({id: 1, title: 'First Post!'});
   });
 });

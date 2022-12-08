@@ -1,3 +1,21 @@
+export interface Mapper {
+  fetch(
+    id: number | string,
+    options?: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
+}
+
+export const NullMapper: Mapper = {
+  fetch(
+    id: number | string,
+    options: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> {
+    throw new Error(
+      'Mapper.get not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+    );
+  },
+};
+
 export type ModelState = 'new' | 'empty' | 'loaded';
 // | 'getting'
 // | 'creating'
@@ -29,14 +47,16 @@ export interface ModelClass<M> extends Function {
       inverse?: string;
     };
   };
+  mapper: Mapper;
 }
 
 export default class Model<A extends BaseAttributes = {id: number}> {
+  static relations: ModelClass<Model>['relations'] = {};
+  static mapper: Mapper = NullMapper;
+
   state: ModelState;
   attributes: A;
   relations: Relations;
-
-  static relations: ModelClass<Model>['relations'] = {};
 
   constructor({state = 'new', attributes = {}, relations}: ModelNewOpts = {}) {
     this.state = state;

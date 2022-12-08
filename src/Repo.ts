@@ -82,6 +82,21 @@ const isLoadable = (x: any): x is Loadable => {
   return false;
 };
 
+type MapperResult =
+  | {
+      type: 'fetch:success';
+      modelClass: ModelClass<any>;
+      record: Record<string, any>;
+    }
+  | {
+      type: 'fetch:error';
+      modelClass: ModelClass<any>;
+      id: number | string;
+      error: string;
+    };
+
+export type MapperAction = () => Promise<MapperResult>;
+
 export default class Repo {
   constructor(
     private models: ModelMap = {},
@@ -426,4 +441,51 @@ export default class Repo {
     const queryId = `${modelClass.name}:${hash(options)}`;
     return this.queries[queryId] as Query<M>;
   }
+
+  fetch<M extends Model>(
+    modelClass: ModelClass<M>,
+    id: M['id'],
+    options?: Record<string, unknown>,
+  ): [Repo, MapperAction] {
+    const r = this.load(modelClass, {id});
+    const action = (): Promise<MapperResult> => {
+      return modelClass.mapper.fetch(id, options).then(
+        record => ({type: 'fetch:success', modelClass, record}),
+        error => ({type: 'fetch:error', modelClass, id, error}),
+      );
+    };
+    return [r, action];
+  }
+
+  query<M extends Model>(
+    modelClass: ModelClass<M>,
+    options: Record<string, unknown>,
+  ): this {
+    return this;
+  }
+
+  processMapperResult(result: MapperResult): Repo {
+    switch (result.type) {
+      case 'fetch:success':
+        return this.load(result.modelClass, result.record);
+      case 'fetch:error':
+        return this;
+    }
+  }
 }
+
+// let r = new Repo();
+// let a: RepoAction;
+// [r, a] = r.fetch(Person, 1);
+// a().then((result) => {
+//   r = r.processResult(result);
+// });
+//
+// class RepoActionExec {
+//   constructor(public action: RepoAction) {}
+//   exec(send: SendFn<Evt>) {
+//     this.action().then((result) => {
+//       send({type: 'REPO_ACTION_EXEC_RESULT', result});
+//     });
+//   }
+// }
