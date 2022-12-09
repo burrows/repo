@@ -353,7 +353,6 @@ export default class Repo {
         model = new modelClass({
           state: empty ? 'empty' : 'loaded',
           attributes: record,
-          relations: {},
         });
       }
 
