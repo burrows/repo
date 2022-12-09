@@ -1,5 +1,5 @@
 import hash from 'object-hash';
-import Model, {ModelClass, Errors} from './Model';
+import Model, {ModelClass} from './Model';
 import Query from './Query';
 
 // models:
@@ -170,7 +170,10 @@ export default class Repo {
   load<M extends Model>(
     klass: ModelClass<M>,
     records: Record<string, unknown> | Record<string, unknown>[],
-    {errors = {}}: {errors?: Errors} = {},
+    {
+      state = 'loaded',
+      errors = {},
+    }: {state?: Model['state']; errors?: Model['errors']} = {},
   ): Repo {
     const models = {...this.models};
     const relations = {...this.relations};
@@ -343,17 +346,16 @@ export default class Repo {
       }
 
       let model = models[loadKey];
-      const empty = Object.keys(record).length === 1;
 
       if (model) {
         model = model.update({
-          state: empty ? model.state : 'loaded',
+          state,
           attributes: {...model.attributes, ...record},
           errors,
         });
       } else {
         model = new modelClass({
-          state: empty ? 'empty' : 'loaded',
+          state,
           attributes: record,
           errors,
         });
@@ -449,7 +451,7 @@ export default class Repo {
     id: M['id'],
     options?: Record<string, unknown>,
   ): [Repo, MapperAction] {
-    const r = this.load(modelClass, {id});
+    const r = this.load(modelClass, {id}, {state: 'fetching'});
     const action = (): Promise<MapperResult> => {
       return modelClass.mapper.fetch(id, options).then(
         record => ({type: 'fetch:success', modelClass, record}),

@@ -280,13 +280,13 @@ describe('Repo#load', () => {
 
       expect(a instanceof Author).toBe(true);
       expect(a!.id).toBe(10);
-      expect(a!.state).toBe('empty');
+      expect(a!.state).toBe('loaded');
       expect(a!.attributes).toEqual({id: 10});
       expect(a!.posts).toEqual([p]);
 
       expect(c instanceof Comment).toBe(true);
       expect(c!.id).toBe(1);
-      expect(c!.state).toBe('empty');
+      expect(c!.state).toBe('loaded');
       expect(c!.attributes).toEqual({id: 1});
       expect(c!.post).toBe(p);
 
@@ -432,7 +432,7 @@ describe('Repo#fetch', () => {
 
     expect(p instanceof Post).toBe(true);
     expect(p!.id).toBe(1);
-    expect(p!.state).toBe('empty');
+    expect(p!.state).toBe('fetching');
     expect(p!.attributes).toEqual({id: 1});
 
     const result = await a();
@@ -457,7 +457,7 @@ describe('Repo#fetch', () => {
 
       expect(p instanceof Post).toBe(true);
       expect(p!.id).toBe(99999);
-      expect(p!.state).toBe('empty');
+      expect(p!.state).toBe('fetching');
       expect(p!.attributes).toEqual({id: 99999});
       expect(p!.errors).toEqual({});
 
@@ -468,7 +468,7 @@ describe('Repo#fetch', () => {
       p = r.getModel(Post, 99999);
       expect(p instanceof Post).toBe(true);
       expect(p!.id).toBe(99999);
-      expect(p!.state).toBe('empty');
+      expect(p!.state).toBe('loaded');
       expect(p!.attributes).toEqual({id: 99999});
       expect(p!.errors).toEqual({base: 'boom'});
     });

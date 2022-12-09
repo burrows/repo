@@ -7,8 +7,8 @@ export interface Mapper {
 
 export const NullMapper: Mapper = {
   fetch(
-    id: number | string,
-    options: Record<string, unknown> = {},
+    _id: number | string,
+    _options: Record<string, unknown> = {},
   ): Promise<Record<string, unknown>> {
     throw new Error(
       'Mapper.get not defined: set the static mapper property on your model to an object that implements the Mapper interface',
@@ -16,7 +16,7 @@ export const NullMapper: Mapper = {
   },
 };
 
-export type ModelState = 'new' | 'empty' | 'loaded';
+export type ModelState = 'new' | 'fetching' | 'loaded';
 // | 'getting'
 // | 'creating'
 // | 'updating'
