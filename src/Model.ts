@@ -22,7 +22,6 @@ export type ModelState = 'new' | 'empty' | 'loaded';
 // | 'updating'
 // | 'destroying'
 // | 'destroyed'
-// | 'error';
 
 interface BaseAttributes {
   id: string | number;
@@ -32,9 +31,14 @@ interface Relations {
   [name: string]: Model[] | Model | null;
 }
 
+export interface Errors {
+  [attribute: string]: string;
+}
+
 interface ModelNewOpts {
   state?: ModelState;
   attributes?: Record<string, unknown>;
+  errors?: Errors;
   relations?: Relations;
 }
 
@@ -57,10 +61,17 @@ export default class Model<A extends BaseAttributes = {id: number}> {
   state: ModelState;
   attributes: A;
   relations: Relations;
+  errors: Errors;
 
-  constructor({state = 'new', attributes = {}, relations}: ModelNewOpts = {}) {
+  constructor({
+    state = 'new',
+    attributes = {},
+    errors = {},
+    relations,
+  }: ModelNewOpts = {}) {
     this.state = state;
     this.attributes = attributes as A; // FIXME: validate attributes
+    this.errors = errors;
     this.relations = relations || this.defaultRelations();
   }
 
@@ -87,9 +98,10 @@ export default class Model<A extends BaseAttributes = {id: number}> {
   update({
     state = this.state,
     attributes = this.attributes as Record<string, unknown>,
+    errors = this.errors,
     relations = this.relations,
   }: ModelNewOpts = {}): this {
-    return new this.ctor({state, attributes, relations});
+    return new this.ctor({state, attributes, errors, relations});
   }
 
   private defaultRelations(): Relations {

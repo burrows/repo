@@ -1,5 +1,5 @@
 import hash from 'object-hash';
-import Model, {ModelClass} from './Model';
+import Model, {ModelClass, Errors} from './Model';
 import Query from './Query';
 
 // models:
@@ -170,6 +170,7 @@ export default class Repo {
   load<M extends Model>(
     klass: ModelClass<M>,
     records: Record<string, unknown> | Record<string, unknown>[],
+    {errors = {}}: {errors?: Errors} = {},
   ): Repo {
     const models = {...this.models};
     const relations = {...this.relations};
@@ -348,11 +349,13 @@ export default class Repo {
         model = model.update({
           state: empty ? model.state : 'loaded',
           attributes: {...model.attributes, ...record},
+          errors,
         });
       } else {
         model = new modelClass({
           state: empty ? 'empty' : 'loaded',
           attributes: record,
+          errors,
         });
       }
 
@@ -450,7 +453,12 @@ export default class Repo {
     const action = (): Promise<MapperResult> => {
       return modelClass.mapper.fetch(id, options).then(
         record => ({type: 'fetch:success', modelClass, record}),
-        error => ({type: 'fetch:error', modelClass, id, error}),
+        error => ({
+          type: 'fetch:error',
+          modelClass,
+          id,
+          error: error instanceof Error ? error.message : String(error),
+        }),
       );
     };
     return [r, action];
@@ -468,7 +476,11 @@ export default class Repo {
       case 'fetch:success':
         return this.load(result.modelClass, result.record);
       case 'fetch:error':
-        return this;
+        return this.load(
+          result.modelClass,
+          {id: result.id},
+          {errors: {base: result.error}},
+        );
     }
   }
 }

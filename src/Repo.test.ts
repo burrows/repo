@@ -445,4 +445,32 @@ describe('Repo#fetch', () => {
     expect(p!.state).toBe('loaded');
     expect(p!.attributes).toEqual({id: 1, title: 'First Post!'});
   });
+
+  describe('when an error occurs', () => {
+    it('adds a base error to the model', async () => {
+      let r = new Repo();
+      let a: MapperAction;
+
+      [r, a] = r.fetch(Post, 99999);
+
+      let p = r.getModel(Post, 99999);
+
+      expect(p instanceof Post).toBe(true);
+      expect(p!.id).toBe(99999);
+      expect(p!.state).toBe('empty');
+      expect(p!.attributes).toEqual({id: 99999});
+      expect(p!.errors).toEqual({});
+
+      const result = await a();
+
+      r = r.processMapperResult(result);
+
+      p = r.getModel(Post, 99999);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.id).toBe(99999);
+      expect(p!.state).toBe('empty');
+      expect(p!.attributes).toEqual({id: 99999});
+      expect(p!.errors).toEqual({base: 'boom'});
+    });
+  });
 });
