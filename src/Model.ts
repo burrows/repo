@@ -1,3 +1,9 @@
+import Ajv, {Schema} from 'ajv';
+import ajvFormats from 'ajv-formats';
+
+const ajv = new Ajv({allErrors: true});
+ajvFormats(ajv);
+
 export interface Mapper {
   fetch(
     id: number | string,
@@ -17,7 +23,6 @@ export const NullMapper: Mapper = {
 };
 
 export type ModelState = 'new' | 'fetching' | 'loaded';
-// | 'getting'
 // | 'creating'
 // | 'updating'
 // | 'destroying'
@@ -40,7 +45,10 @@ interface ModelNewOpts {
   attributes?: Record<string, unknown>;
   errors?: Errors;
   relations?: Relations;
+  validate?: boolean;
 }
+
+type ModelUpdateOpts = Omit<ModelNewOpts, 'validate'>;
 
 export interface ModelClass<M> extends Function {
   new (opts: ModelNewOpts): M;
@@ -52,11 +60,65 @@ export interface ModelClass<M> extends Function {
     };
   };
   mapper: Mapper;
+  schema: Schema;
 }
+
+const defaultAttributes = (schema: any): any => {
+  if (!schema) return {};
+
+  if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+    return defaultAttributes(schema.oneOf[0]);
+  }
+
+  if (schema?.type !== 'object') {
+    throw new Error(
+      `Model.defaultAttributes: can't generate attributes from schema`,
+    );
+  }
+
+  const a: any = {};
+
+  for (const k of schema.required || []) {
+    let type = schema?.properties[k]?.type;
+
+    if (!type) continue;
+
+    if (Array.isArray(type)) {
+      type = type[0];
+    }
+
+    if (!type) continue;
+
+    switch (type) {
+      case 'number':
+      case 'integer':
+        a[k] = 0;
+        break;
+      case 'string':
+        a[k] = schema.properties[k].enum ? schema.properties[k].enum[0] : '';
+        break;
+      case 'boolean':
+        a[k] = false;
+        break;
+      case 'array':
+        a[k] = [];
+        break;
+      case 'object':
+        a[k] = defaultAttributes(schema.properties[k]);
+        break;
+      case 'null':
+        a[k] = null;
+        break;
+    }
+  }
+
+  return a;
+};
 
 export default class Model<A extends BaseAttributes = {id: number}> {
   static relations: ModelClass<Model>['relations'] = {};
   static mapper: Mapper = NullMapper;
+  static schema: Schema = {type: 'object'};
 
   state: ModelState;
   attributes: A;
@@ -65,12 +127,25 @@ export default class Model<A extends BaseAttributes = {id: number}> {
 
   constructor({
     state = 'new',
-    attributes = {},
+    attributes,
     errors = {},
     relations,
+    validate = true,
   }: ModelNewOpts = {}) {
+    const attrs = (attributes || defaultAttributes(this.ctor.schema)) as A;
+
+    if (validate) {
+      const validator = ajv.compile(this.ctor.schema);
+      if (!validator(attrs)) {
+        const msg = `${
+          this.name
+        }: attributes failed validation: ${ajv.errorsText(validator.errors)}`;
+        throw new Error(msg);
+      }
+    }
+
     this.state = state;
-    this.attributes = attributes as A; // FIXME: validate attributes
+    this.attributes = attrs;
     this.errors = errors;
     this.relations = relations || this.defaultRelations();
   }
@@ -97,11 +172,17 @@ export default class Model<A extends BaseAttributes = {id: number}> {
 
   update({
     state = this.state,
-    attributes = this.attributes as Record<string, unknown>,
+    attributes,
     errors = this.errors,
     relations = this.relations,
-  }: ModelNewOpts = {}): this {
-    return new this.ctor({state, attributes, errors, relations});
+  }: ModelUpdateOpts = {}): this {
+    return new this.ctor({
+      state,
+      attributes: (attributes || this.attributes) as Record<string, unknown>,
+      errors,
+      relations,
+      validate: attributes !== this.attributes,
+    });
   }
 
   private defaultRelations(): Relations {

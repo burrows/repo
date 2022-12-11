@@ -4,6 +4,8 @@
   "description": "Immutable Model Repository",
   "main": "build/index.js",
   "dependencies": {
+    "ajv": "^8.11.2",
+    "ajv-formats": "^2.1.1",
     "json-schema-to-ts": "^1.6.5",
     "object-hash": "^3.0.0"
   },
