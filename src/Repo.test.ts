@@ -126,10 +126,10 @@ class Comment extends Model<FromSchema<typeof CommentAttributesSchema>> {
   }
 }
 
-describe('Repo#load', () => {
+describe('Repo#upsert', () => {
   describe('with records containing no relations', () => {
     it('loads a single model', () => {
-      const r = new Repo().load(Post, {id: 1, title: 'a'});
+      const r = new Repo().upsert(Post, {id: 1, title: 'a'});
       const p = r.getModel(Post, 1);
 
       expect(p instanceof Post).toBe(true);
@@ -139,7 +139,7 @@ describe('Repo#load', () => {
     });
 
     it('loads a multiple models', () => {
-      const r = new Repo().load(Author, [
+      const r = new Repo().upsert(Author, [
         {id: 1, firstName: 'Homer', lastName: 'Simpson'},
         {id: 2, firstName: 'Marge', lastName: 'Simpson'},
         {id: 3, firstName: 'Bart', lastName: 'Simpson'},
@@ -164,7 +164,7 @@ describe('Repo#load', () => {
 
   describe('with records containing nested related records', () => {
     it('loads the given model and its related models', () => {
-      const r = new Repo().load(Post, {
+      const r = new Repo().upsert(Post, {
         id: 1,
         title: 'post 1',
         author: {
@@ -267,7 +267,7 @@ describe('Repo#load', () => {
     });
 
     it('loads empty related models', () => {
-      const r = new Repo().load(Post, {
+      const r = new Repo().upsert(Post, {
         id: 1,
         title: 'post 1',
         author: {id: 10},
@@ -303,17 +303,17 @@ describe('Repo#load', () => {
 
   describe('with queries present', () => {
     it('updates the queries that contain the newly loaded models', () => {
-      let r = new Repo().loadQuery(Author, {x: 1}, [
+      let r = new Repo().upsertQuery(Author, {x: 1}, [
         {id: 1, firstName: 'Homer', lastName: 'Simpson'},
         {id: 3, firstName: 'Bart', lastName: 'Simpson'},
       ]);
 
-      r = r.loadQuery(Author, {x: 2}, [
+      r = r.upsertQuery(Author, {x: 2}, [
         {id: 2, firstName: 'Marge', lastName: 'Simpson'},
         {id: 4, firstName: 'Lisa', lastName: 'Simpson'},
       ]);
 
-      r = r.load(Post, {
+      r = r.upsert(Post, {
         id: 1,
         title: 'a',
         author: {id: 3, firstName: 'Bartholomew', lastName: 'Simpson'},
@@ -329,9 +329,9 @@ describe('Repo#load', () => {
   });
 });
 
-describe('Repo#loadQuery', () => {
+describe('Repo#upsertQuery', () => {
   it('loads the models and assigns them to a Query object', () => {
-    const r = new Repo().loadQuery(Author, {}, [
+    const r = new Repo().upsertQuery(Author, {}, [
       {id: 1, firstName: 'Homer', lastName: 'Simpson'},
       {id: 2, firstName: 'Marge', lastName: 'Simpson'},
       {id: 3, firstName: 'Bart', lastName: 'Simpson'},
@@ -354,7 +354,7 @@ describe('Repo#loadQuery', () => {
 
   describe('with paging parameters', () => {
     it('creates a sparse array', () => {
-      let r = new Repo().loadQuery(
+      let r = new Repo().upsertQuery(
         Author,
         {},
         [
@@ -381,7 +381,7 @@ describe('Repo#loadQuery', () => {
         expect(as!.models[i]).toBeUndefined();
       }
 
-      r = r.loadQuery(
+      r = r.upsertQuery(
         Author,
         {},
         [

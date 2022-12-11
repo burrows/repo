@@ -105,13 +105,13 @@ export default class Repo {
     private results: ResultMap = {},
   ) {}
 
-  loadQuery<M extends Model>(
+  upsertQuery<M extends Model>(
     modelClass: ModelClass<M>,
     options: Record<string, unknown>,
     records: Record<string, unknown>[],
     paging?: {page: number; pageSize: number; count: number},
   ): Repo {
-    let repo = this.load(modelClass, records);
+    let repo = this.upsert(modelClass, records);
     const loadedModels = records.map(
       r => repo.getModel(modelClass, r.id as M['id'])!,
     );
@@ -166,8 +166,8 @@ export default class Repo {
     return new Repo(repo.models, repo.relations, queries, results);
   }
 
-  // Loads the given records into the repo.
-  load<M extends Model>(
+  // Inserts or updates the given records into the repo.
+  upsert<M extends Model>(
     klass: ModelClass<M>,
     records: Record<string, unknown> | Record<string, unknown>[],
     {
@@ -451,7 +451,7 @@ export default class Repo {
     id: M['id'],
     options?: Record<string, unknown>,
   ): [Repo, MapperAction] {
-    const r = this.load(modelClass, {id}, {state: 'fetching'});
+    const r = this.upsert(modelClass, {id}, {state: 'fetching'});
     const action = (): Promise<MapperResult> => {
       return modelClass.mapper.fetch(id, options).then(
         record => ({type: 'fetch:success', modelClass, record}),
@@ -476,9 +476,9 @@ export default class Repo {
   processMapperResult(result: MapperResult): Repo {
     switch (result.type) {
       case 'fetch:success':
-        return this.load(result.modelClass, result.record);
+        return this.upsert(result.modelClass, result.record);
       case 'fetch:error':
-        return this.load(
+        return this.upsert(
           result.modelClass,
           {id: result.id},
           {errors: {base: result.error}},
