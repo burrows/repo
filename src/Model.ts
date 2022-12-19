@@ -9,6 +9,14 @@ export interface Mapper {
     id: number | string,
     options?: Record<string, unknown>,
   ): Promise<Record<string, unknown>>;
+
+  query(
+    options?: Record<string, unknown>,
+    paging?: {page: number; pageSize?: number},
+  ): Promise<{
+    records: Record<string, unknown>[];
+    paging?: {page: number; pageSize: number; count: number};
+  }>;
 }
 
 export const NullMapper: Mapper = {
@@ -18,6 +26,18 @@ export const NullMapper: Mapper = {
   ): Promise<Record<string, unknown>> {
     throw new Error(
       'Mapper.get not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+    );
+  },
+
+  query(
+    _options: Record<string, unknown>,
+    _paging?: {page: number; pageSize?: number},
+  ): Promise<{
+    records: Record<string, unknown>[];
+    paging?: {page: number; pageSize: number; count: number};
+  }> {
+    throw new Error(
+      'Mapper.query not defined: set the static mapper property on your model to an object that implements the Mapper interface',
     );
   },
 };

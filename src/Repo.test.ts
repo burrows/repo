@@ -1,6 +1,6 @@
 import {FromSchema} from 'json-schema-to-ts';
 import Repo, {MapperAction} from './Repo';
-import Model from './Model';
+import Model, {NullMapper} from './Model';
 import Query from './Query';
 
 const PostAttributesSchema = {
@@ -14,6 +14,8 @@ const PostAttributesSchema = {
 } as const;
 
 const PostMapper = {
+  ...NullMapper,
+
   fetch(id: number, _options: Record<string, unknown>) {
     switch (id) {
       case 1:
@@ -66,7 +68,52 @@ const AuthorAttributesSchema = {
   },
 } as const;
 
+const authors = [
+  {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+  {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+  {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+  {id: 4, firstName: 'Lisa', lastName: 'Simpson'},
+  {id: 5, firstName: 'Maggie', lastName: 'Simpson'},
+  {id: 6, firstName: 'Ned', lastName: 'Flanders'},
+  {id: 7, firstName: 'Maude', lastName: 'Flanders'},
+  {id: 8, firstName: 'Rod', lastName: 'Flanders'},
+  {id: 9, firstName: 'Todd', lastName: 'Flanders'},
+  {id: 10, firstName: 'Seymore', lastName: 'Skinner'},
+  {id: 11, firstName: 'Edna', lastName: 'Krabappel'},
+];
+
+const AuthorMapper = {
+  ...NullMapper,
+
+  query(
+    options: Record<string, unknown>,
+    paging?: {page: number; pageSize?: number},
+  ) {
+    if (options.error) return Promise.reject(new Error('boom'));
+
+    let records = options.lastName
+      ? authors.filter(a => a.lastName === options.lastName)
+      : authors;
+    const pageSize = paging?.pageSize ?? 3;
+    const count = records.length;
+
+    if (paging) {
+      records = records.slice(
+        paging.page * pageSize,
+        (paging.page + 1) * pageSize,
+      );
+    }
+
+    return Promise.resolve({
+      records,
+      paging: paging ? {page: paging.page, pageSize, count} : undefined,
+    });
+  },
+};
+
 class Author extends Model<FromSchema<typeof AuthorAttributesSchema>> {
+  static mapper = AuthorMapper;
+
   static get relations() {
     return {
       posts: {
@@ -303,15 +350,27 @@ describe('Repo#upsert', () => {
 
   describe('with queries present', () => {
     it('updates the queries that contain the newly loaded models', () => {
-      let r = new Repo().upsertQuery(Author, {x: 1}, [
-        {id: 1, firstName: 'Homer', lastName: 'Simpson'},
-        {id: 3, firstName: 'Bart', lastName: 'Simpson'},
-      ]);
+      let r = new Repo().upsertQuery(
+        Author,
+        {x: 1},
+        {
+          records: [
+            {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+            {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+          ],
+        },
+      );
 
-      r = r.upsertQuery(Author, {x: 2}, [
-        {id: 2, firstName: 'Marge', lastName: 'Simpson'},
-        {id: 4, firstName: 'Lisa', lastName: 'Simpson'},
-      ]);
+      r = r.upsertQuery(
+        Author,
+        {x: 2},
+        {
+          records: [
+            {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+            {id: 4, firstName: 'Lisa', lastName: 'Simpson'},
+          ],
+        },
+      );
 
       r = r.upsert(Post, {
         id: 1,
@@ -331,11 +390,17 @@ describe('Repo#upsert', () => {
 
 describe('Repo#upsertQuery', () => {
   it('loads the models and assigns them to a Query object', () => {
-    const r = new Repo().upsertQuery(Author, {}, [
-      {id: 1, firstName: 'Homer', lastName: 'Simpson'},
-      {id: 2, firstName: 'Marge', lastName: 'Simpson'},
-      {id: 3, firstName: 'Bart', lastName: 'Simpson'},
-    ]);
+    const r = new Repo().upsertQuery(
+      Author,
+      {},
+      {
+        records: [
+          {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+          {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+          {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+        ],
+      },
+    );
 
     const as = r.getQuery(Author, {});
 
@@ -357,12 +422,14 @@ describe('Repo#upsertQuery', () => {
       let r = new Repo().upsertQuery(
         Author,
         {},
-        [
-          {id: 1, firstName: 'Homer', lastName: 'Simpson'},
-          {id: 2, firstName: 'Marge', lastName: 'Simpson'},
-          {id: 3, firstName: 'Bart', lastName: 'Simpson'},
-        ],
-        {page: 0, pageSize: 3, count: 10},
+        {
+          records: [
+            {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+            {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+            {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+          ],
+          paging: {page: 0, pageSize: 3, count: 10},
+        },
       );
 
       let as = r.getQuery(Author, {});
@@ -384,12 +451,14 @@ describe('Repo#upsertQuery', () => {
       r = r.upsertQuery(
         Author,
         {},
-        [
-          {id: 7, firstName: 'Ned', lastName: 'Flanders'},
-          {id: 8, firstName: 'Maude', lastName: 'Flanders'},
-          {id: 9, firstName: 'Chief', lastName: 'Wiggum'},
-        ],
-        {page: 2, pageSize: 3, count: 10},
+        {
+          records: [
+            {id: 7, firstName: 'Ned', lastName: 'Flanders'},
+            {id: 8, firstName: 'Maude', lastName: 'Flanders'},
+            {id: 9, firstName: 'Chief', lastName: 'Wiggum'},
+          ],
+          paging: {page: 2, pageSize: 3, count: 10},
+        },
       );
 
       as = r.getQuery(Author, {});
@@ -471,6 +540,209 @@ describe('Repo#fetch', () => {
       expect(p!.state).toBe('loaded');
       expect(p!.attributes).toEqual({id: 99999});
       expect(p!.errors).toEqual({base: 'boom'});
+    });
+  });
+});
+
+describe('Repo#query', () => {
+  it(`adds an empty query and returns a RepoAction that calls the mapper's query method`, async () => {
+    let r = new Repo();
+    let a: MapperAction;
+
+    [r, a] = r.query(Author, {});
+
+    let q = r.getQuery(Author, {});
+
+    expect(q instanceof Query).toBe(true);
+    expect(q!.modelClass).toBe(Author);
+    expect(q!.state).toBe('getting');
+    expect(q!.models).toEqual([]);
+
+    const result = await a();
+
+    r = r.processMapperResult(result);
+
+    q = r.getQuery(Author, {});
+    expect(q instanceof Query).toBe(true);
+    expect(q!.modelClass).toBe(Author);
+    expect(q!.state).toBe('loaded');
+    expect(q!.models.length).toEqual(authors.length);
+    expect(q!.models[0] instanceof Author).toBe(true);
+    expect(q!.models[0]!.id).toBe(1);
+    expect(q!.models[0]!.attributes).toEqual({
+      id: 1,
+      firstName: 'Homer',
+      lastName: 'Simpson',
+    });
+  });
+
+  describe('when an error occurs', () => {
+    it('adds an error to the query', async () => {
+      let r = new Repo();
+      let a: MapperAction;
+
+      [r, a] = r.query(Author, {error: true});
+
+      let q = r.getQuery(Author, {error: true});
+
+      expect(q instanceof Query).toBe(true);
+      expect(q!.modelClass).toBe(Author);
+      expect(q!.state).toBe('getting');
+      expect(q!.models).toEqual([]);
+
+      const result = await a();
+
+      r = r.processMapperResult(result);
+
+      q = r.getQuery(Author, {error: true});
+      expect(q instanceof Query).toBe(true);
+      expect(q!.modelClass).toBe(Author);
+      expect(q!.state).toBe('error');
+      expect(q!.error).toBe('boom');
+    });
+  });
+
+  describe('with options', () => {
+    it('creates queries with the given options', async () => {
+      let r = new Repo();
+      let a1: MapperAction;
+      let a2: MapperAction;
+
+      [r, a1] = r.query(Author, {lastName: 'Simpson'});
+      [r, a2] = r.query(Author, {lastName: 'Flanders'});
+
+      const wiggums = r.getQuery(Author, {lastName: 'Wiggum'});
+      expect(wiggums).toBeUndefined();
+
+      let simpsons = r.getQuery(Author, {lastName: 'Simpson'});
+      let flanders = r.getQuery(Author, {lastName: 'Flanders'});
+
+      expect(simpsons instanceof Query).toBe(true);
+      expect(simpsons!.state).toBe('getting');
+      expect(flanders instanceof Query).toBe(true);
+      expect(flanders!.state).toBe('getting');
+
+      let result = await a1();
+      r = r.processMapperResult(result);
+
+      simpsons = r.getQuery(Author, {lastName: 'Simpson'});
+      flanders = r.getQuery(Author, {lastName: 'Flanders'});
+
+      expect(simpsons instanceof Query).toBe(true);
+      expect(simpsons!.state).toBe('loaded');
+      expect(flanders instanceof Query).toBe(true);
+      expect(flanders!.state).toBe('getting');
+
+      result = await a2();
+      r = r.processMapperResult(result);
+
+      simpsons = r.getQuery(Author, {lastName: 'Simpson'});
+      flanders = r.getQuery(Author, {lastName: 'Flanders'});
+
+      expect(simpsons instanceof Query).toBe(true);
+      expect(simpsons!.state).toBe('loaded');
+      expect(flanders instanceof Query).toBe(true);
+      expect(flanders!.state).toBe('loaded');
+
+      expect(simpsons!.models.map(a => a?.attributes.firstName)).toEqual([
+        'Homer',
+        'Marge',
+        'Bart',
+        'Lisa',
+        'Maggie',
+      ]);
+      expect(flanders!.models.map(a => a?.attributes.firstName)).toEqual([
+        'Ned',
+        'Maude',
+        'Rod',
+        'Todd',
+      ]);
+    });
+  });
+
+  describe('with pagination', () => {
+    it('creates a sparse models array with the page of records returned by the mappers', async () => {
+      let r = new Repo();
+      let a: MapperAction;
+
+      [r, a] = r.query(Author, {}, {page: 0, pageSize: 3});
+
+      let q = r.getQuery(Author, {});
+
+      expect(q instanceof Query).toBe(true);
+      expect(q!.modelClass).toBe(Author);
+      expect(q!.state).toBe('getting');
+      expect(q!.models).toEqual([]);
+
+      r = r.processMapperResult(await a());
+
+      q = r.getQuery(Author, {});
+
+      expect(q instanceof Query).toBe(true);
+      expect(q!.modelClass).toBe(Author);
+      expect(q!.state).toBe('loaded');
+      expect(q!.models.length).toEqual(11);
+      expect(q!.models.map(m => m?.id)).toEqual([
+        1,
+        2,
+        3,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ]);
+
+      [r, a] = r.query(Author, {}, {page: 1});
+
+      r = r.processMapperResult(await a());
+
+      q = r.getQuery(Author, {});
+
+      expect(q instanceof Query).toBe(true);
+      expect(q!.modelClass).toBe(Author);
+      expect(q!.state).toBe('loaded');
+      expect(q!.models.length).toEqual(11);
+      expect(q!.models.map(m => m?.id)).toEqual([
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      ]);
+
+      [r, a] = r.query(Author, {}, {page: 3});
+
+      r = r.processMapperResult(await a());
+
+      q = r.getQuery(Author, {});
+
+      expect(q instanceof Query).toBe(true);
+      expect(q!.modelClass).toBe(Author);
+      expect(q!.state).toBe('loaded');
+      expect(q!.models.length).toEqual(11);
+      expect(q!.models.map(m => m?.id)).toEqual([
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        undefined,
+        undefined,
+        undefined,
+        10,
+        11,
+      ]);
     });
   });
 });

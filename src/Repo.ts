@@ -93,6 +93,19 @@ type MapperResult =
       modelClass: ModelClass<any>;
       id: number | string;
       error: string;
+    }
+  | {
+      type: 'query:success';
+      modelClass: ModelClass<any>;
+      options: Record<string, unknown>;
+      records: Record<string, unknown>[];
+      paging?: {page: number; pageSize: number; count: number};
+    }
+  | {
+      type: 'query:error';
+      modelClass: ModelClass<any>;
+      options: Record<string, unknown>;
+      error: string;
     };
 
 export type MapperAction = () => Promise<MapperResult>;
@@ -108,13 +121,27 @@ export default class Repo {
   upsertQuery<M extends Model>(
     modelClass: ModelClass<M>,
     options: Record<string, unknown>,
-    records: Record<string, unknown>[],
-    paging?: {page: number; pageSize: number; count: number},
+    {
+      records,
+      state = 'loaded',
+      paging,
+      error,
+    }: {
+      records?: Record<string, unknown>[];
+      state?: Query<M>['state'];
+      paging?: {page: number; pageSize: number; count: number};
+      error?: string;
+    } = {},
   ): Repo {
-    let repo = this.upsert(modelClass, records);
-    const loadedModels = records.map(
-      r => repo.getModel(modelClass, r.id as M['id'])!,
-    );
+    let repo: Repo = this;
+    let loadedModels: M[] | undefined;
+
+    if (records) {
+      repo = this.upsert(modelClass, records);
+      loadedModels = records.map(
+        r => repo.getModel(modelClass, r.id as M['id'])!,
+      );
+    }
 
     const queries = {...this.queries};
     const results = {...this.results};
@@ -123,9 +150,9 @@ export default class Repo {
     let query = this.queries[queryId] as Query<M>;
 
     if (!query) {
-      let models = loadedModels;
+      let models = loadedModels || [];
 
-      if (paging) {
+      if (loadedModels && paging) {
         models = [];
         models.length = paging.count;
         models.splice(
@@ -136,16 +163,18 @@ export default class Repo {
       }
 
       query = new Query(modelClass, {
-        state: 'loaded',
+        state,
         options,
+        error,
         pageSize: paging?.pageSize,
         models,
       });
     } else {
-      let models: (M | undefined)[] = loadedModels;
+      let models: (M | undefined)[] | undefined = loadedModels;
 
-      if (paging) {
+      if (loadedModels && paging) {
         models = query.models.slice();
+        models.length = paging.count;
         models.splice(
           paging.page * paging.pageSize,
           loadedModels.length,
@@ -153,12 +182,12 @@ export default class Repo {
         );
       }
 
-      query = query.update({state: 'loaded', models});
+      query = query.update({state, error, models});
     }
 
     queries[queryId] = query;
 
-    for (const model of loadedModels) {
+    for (const model of loadedModels || []) {
       results[model.key] = results[model.key] || {};
       results[model.key][queryId] = true;
     }
@@ -469,8 +498,27 @@ export default class Repo {
   query<M extends Model>(
     modelClass: ModelClass<M>,
     options: Record<string, unknown>,
-  ): this {
-    return this;
+    paging?: {page: number; pageSize?: number},
+  ): [Repo, MapperAction] {
+    const r = this.upsertQuery(modelClass, options, {state: 'getting'});
+    const action = (): Promise<MapperResult> => {
+      return modelClass.mapper.query(options, paging).then(
+        ({records, paging}) => ({
+          type: 'query:success',
+          modelClass,
+          options,
+          records,
+          paging,
+        }),
+        error => ({
+          type: 'query:error',
+          modelClass,
+          options,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    };
+    return [r, action];
   }
 
   processMapperResult(result: MapperResult): Repo {
@@ -483,6 +531,17 @@ export default class Repo {
           {id: result.id},
           {errors: {base: result.error}},
         );
+      case 'query:success':
+        return this.upsertQuery(result.modelClass, result.options, {
+          state: 'loaded',
+          records: result.records,
+          paging: result.paging,
+        });
+      case 'query:error':
+        return this.upsertQuery(result.modelClass, result.options, {
+          state: 'error',
+          error: result.error,
+        });
     }
   }
 }

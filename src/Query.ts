@@ -6,6 +6,7 @@ export default class Query<M extends Model> {
   public modelClass: ModelClass<M>;
   public state: QueryState;
   public options: Record<string, unknown>;
+  public error?: string;
   public pageSize?: number;
   public models: (M | undefined)[];
 
@@ -14,11 +15,13 @@ export default class Query<M extends Model> {
     {
       state = 'new',
       options = {},
+      error,
       pageSize,
       models = [],
     }: {
       state?: QueryState;
       options?: Record<string, unknown>;
+      error?: string;
       pageSize?: number;
       models?: (M | undefined)[];
     },
@@ -26,6 +29,7 @@ export default class Query<M extends Model> {
     this.modelClass = modelClass;
     this.state = state;
     this.options = options;
+    this.error = error;
     this.pageSize = pageSize;
     this.models = models;
   }
@@ -33,14 +37,17 @@ export default class Query<M extends Model> {
   update({
     state,
     models,
+    error,
   }: {
     state?: QueryState;
     models?: (M | undefined)[];
+    error?: string;
   }): Query<M> {
     return new Query(this.modelClass, {
       options: this.options,
       state: state || this.state,
       models: models || this.models,
+      error: error || this.error,
     });
   }
 }
