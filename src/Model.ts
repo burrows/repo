@@ -48,9 +48,11 @@ export type ModelState = 'new' | 'fetching' | 'loaded';
 // | 'destroying'
 // | 'destroyed'
 
-interface BaseAttributes {
+interface BaseRecord {
   id: string | number;
 }
+
+type RawRecord = Record<string, unknown>;
 
 interface Relations {
   [name: string]: Model[] | Model | null;
@@ -62,7 +64,7 @@ export interface Errors {
 
 interface ModelNewOpts {
   state?: ModelState;
-  attributes?: Record<string, unknown>;
+  record?: RawRecord;
   errors?: Errors;
   relations?: Relations;
   validate?: boolean;
@@ -83,17 +85,15 @@ export interface ModelClass<M> extends Function {
   schema: Schema;
 }
 
-const defaultAttributes = (schema: any): any => {
+const defaultRecord = (schema: any): any => {
   if (!schema) return {};
 
   if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
-    return defaultAttributes(schema.oneOf[0]);
+    return defaultRecord(schema.oneOf[0]);
   }
 
   if (schema?.type !== 'object') {
-    throw new Error(
-      `Model.defaultAttributes: can't generate attributes from schema`,
-    );
+    throw new Error(`Model.defaultRecord: can't generate record from schema`);
   }
 
   const a: any = {};
@@ -124,7 +124,7 @@ const defaultAttributes = (schema: any): any => {
         a[k] = [];
         break;
       case 'object':
-        a[k] = defaultAttributes(schema.properties[k]);
+        a[k] = defaultRecord(schema.properties[k]);
         break;
       case 'null':
         a[k] = null;
@@ -135,37 +135,37 @@ const defaultAttributes = (schema: any): any => {
   return a;
 };
 
-export default class Model<A extends BaseAttributes = {id: number}> {
+export default class Model<R extends BaseRecord = {id: number}> {
   static relations: ModelClass<Model>['relations'] = {};
   static mapper: Mapper = NullMapper;
   static schema: Schema = {type: 'object'};
 
   state: ModelState;
-  attributes: A;
+  record: R;
   relations: Relations;
   errors: Errors;
 
   constructor({
     state = 'new',
-    attributes,
+    record,
     errors = {},
     relations,
     validate = true,
   }: ModelNewOpts = {}) {
-    const attrs = (attributes || defaultAttributes(this.ctor.schema)) as A;
+    const rec = (record || defaultRecord(this.ctor.schema)) as R;
 
     if (validate) {
       const validator = ajv.compile(this.ctor.schema);
-      if (!validator(attrs)) {
-        const msg = `${
-          this.name
-        }: attributes failed validation: ${ajv.errorsText(validator.errors)}`;
+      if (!validator(rec)) {
+        const msg = `${this.name}: record failed validation: ${ajv.errorsText(
+          validator.errors,
+        )}`;
         throw new Error(msg);
       }
     }
 
     this.state = state;
-    this.attributes = attrs;
+    this.record = rec;
     this.errors = errors;
     this.relations = relations || this.defaultRelations();
   }
@@ -174,8 +174,8 @@ export default class Model<A extends BaseAttributes = {id: number}> {
     return this.constructor as ModelClass<this>;
   }
 
-  get id(): A['id'] {
-    return this.attributes.id;
+  get id(): R['id'] {
+    return this.record.id;
   }
 
   get name(): string {
@@ -186,22 +186,22 @@ export default class Model<A extends BaseAttributes = {id: number}> {
     return `${this.name}|${this.id}`;
   }
 
-  set(attributes: Partial<A>): this {
-    return this.update({attributes: {...this.attributes, ...attributes}});
+  set(record: Partial<R>): this {
+    return this.update({record: {...this.record, ...record}});
   }
 
   update({
     state = this.state,
-    attributes,
+    record,
     errors = this.errors,
     relations = this.relations,
   }: ModelUpdateOpts = {}): this {
     return new this.ctor({
       state,
-      attributes: (attributes || this.attributes) as Record<string, unknown>,
+      record: (record || this.record) as RawRecord,
       errors,
       relations,
-      validate: attributes !== this.attributes,
+      validate: record !== this.record,
     });
   }
 

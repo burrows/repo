@@ -379,15 +379,11 @@ export default class Repo {
       if (model) {
         model = model.update({
           state,
-          attributes: {...model.attributes, ...record},
+          record: {...model.record, ...record},
           errors,
         });
       } else {
-        model = new modelClass({
-          state,
-          attributes: record,
-          errors,
-        });
+        model = new modelClass({state, record, errors});
       }
 
       models[loadKey] = updated[loadKey] = model;

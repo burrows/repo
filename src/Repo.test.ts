@@ -3,7 +3,7 @@ import Repo, {MapperAction} from './Repo';
 import Model, {NullMapper} from './Model';
 import Query from './Query';
 
-const PostAttributesSchema = {
+const PostRecordSchema = {
   type: 'object',
   required: ['id', 'title'],
   additionalProperties: false,
@@ -30,7 +30,7 @@ const PostMapper = {
   },
 };
 
-class Post extends Model<FromSchema<typeof PostAttributesSchema>> {
+class Post extends Model<FromSchema<typeof PostRecordSchema>> {
   static mapper = PostMapper;
 
   static get relations() {
@@ -57,7 +57,7 @@ class Post extends Model<FromSchema<typeof PostAttributesSchema>> {
   }
 }
 
-const AuthorAttributesSchema = {
+const AuthorRecordSchema = {
   type: 'object',
   required: ['id', 'firstName', 'lastName'],
   additionalProperties: false,
@@ -111,7 +111,7 @@ const AuthorMapper = {
   },
 };
 
-class Author extends Model<FromSchema<typeof AuthorAttributesSchema>> {
+class Author extends Model<FromSchema<typeof AuthorRecordSchema>> {
   static mapper = AuthorMapper;
 
   static get relations() {
@@ -138,7 +138,7 @@ class Author extends Model<FromSchema<typeof AuthorAttributesSchema>> {
   }
 }
 
-const CommentAttributesSchema = {
+const CommentRecordSchema = {
   type: 'object',
   required: ['id', 'text'],
   additionalProperties: false,
@@ -148,7 +148,7 @@ const CommentAttributesSchema = {
   },
 } as const;
 
-class Comment extends Model<FromSchema<typeof CommentAttributesSchema>> {
+class Comment extends Model<FromSchema<typeof CommentRecordSchema>> {
   static get relations() {
     return {
       author: {
@@ -182,7 +182,7 @@ describe('Repo#upsert', () => {
       expect(p instanceof Post).toBe(true);
       expect(p!.state).toBe('loaded');
       expect(p!.id).toBe(1);
-      expect(p!.attributes.title).toBe('a');
+      expect(p!.record.title).toBe('a');
     });
 
     it('loads a multiple models', () => {
@@ -198,14 +198,14 @@ describe('Repo#upsert', () => {
       expect(a instanceof Author).toBe(true);
       expect(a!.state).toBe('loaded');
       expect(a!.id).toBe(1);
-      expect(a!.attributes.firstName).toBe('Homer');
+      expect(a!.record.firstName).toBe('Homer');
 
       a = r.getModel(Author, 4);
 
       expect(a instanceof Author).toBe(true);
       expect(a!.state).toBe('loaded');
       expect(a!.id).toBe(4);
-      expect(a!.attributes.firstName).toBe('Lisa');
+      expect(a!.record.firstName).toBe('Lisa');
     });
   });
 
@@ -247,12 +247,12 @@ describe('Repo#upsert', () => {
       expect(p instanceof Post).toBe(true);
       expect(p!.state).toBe('loaded');
       expect(p!.id).toBe(1);
-      expect(p!.attributes.title).toBe('post 1');
+      expect(p!.record.title).toBe('post 1');
 
       expect(p!.author instanceof Author).toBe(true);
       expect(p!.author!.state).toBe('loaded');
       expect(p!.author!.id).toBe(10);
-      expect(p!.author!.attributes.firstName).toBe('Homer');
+      expect(p!.author!.record.firstName).toBe('Homer');
       expect(Array.isArray(p!.author!.posts)).toBe(true);
       expect(p!.author!.posts!.includes(p!)).toBe(true);
 
@@ -260,38 +260,38 @@ describe('Repo#upsert', () => {
       expect(p!.comments![0] instanceof Comment).toBe(true);
       expect(p!.comments![0].state).toBe('loaded');
       expect(p!.comments![0].id).toBe(1);
-      expect(p!.comments![0].attributes.text).toBe('comment 1');
+      expect(p!.comments![0].record.text).toBe('comment 1');
       expect(p!.comments![0].author instanceof Author).toBe(true);
       expect(p!.comments![0].author!.id).toBe(20);
-      expect(p!.comments![0].author!.attributes.firstName).toBe('Marge');
+      expect(p!.comments![0].author!.record.firstName).toBe('Marge');
       expect(p!.comments![0].post).toBe(p);
 
       expect(p!.comments![1] instanceof Comment).toBe(true);
       expect(p!.comments![1].state).toBe('loaded');
       expect(p!.comments![1].id).toBe(2);
-      expect(p!.comments![1].attributes.text).toBe('comment 2');
+      expect(p!.comments![1].record.text).toBe('comment 2');
       expect(p!.comments![1].author instanceof Author).toBe(true);
       expect(p!.comments![1].author!.id).toBe(30);
-      expect(p!.comments![1].author!.attributes.firstName).toBe('Bart');
+      expect(p!.comments![1].author!.record.firstName).toBe('Bart');
       expect(p!.comments![1].post).toBe(p);
 
       expect(p!.comments![2] instanceof Comment).toBe(true);
       expect(p!.comments![2].state).toBe('loaded');
       expect(p!.comments![2].id).toBe(3);
-      expect(p!.comments![2].attributes.text).toBe('comment 3');
+      expect(p!.comments![2].record.text).toBe('comment 3');
       expect(p!.comments![2].author instanceof Author).toBe(true);
       expect(p!.comments![2].author!.id).toBe(20);
-      expect(p!.comments![2].author!.attributes.firstName).toBe('Marge');
+      expect(p!.comments![2].author!.record.firstName).toBe('Marge');
       expect(p!.comments![2].author).toBe(p!.comments[0].author);
       expect(p!.comments![2].post).toBe(p);
 
       expect(p!.comments![3] instanceof Comment).toBe(true);
       expect(p!.comments![3].state).toBe('loaded');
       expect(p!.comments![3].id).toBe(4);
-      expect(p!.comments![3].attributes.text).toBe('comment 4');
+      expect(p!.comments![3].record.text).toBe('comment 4');
       expect(p!.comments![3].author instanceof Author).toBe(true);
       expect(p!.comments![3].author!.id).toBe(10);
-      expect(p!.comments![3].author!.attributes.firstName).toBe('Homer');
+      expect(p!.comments![3].author!.record.firstName).toBe('Homer');
       expect(p!.comments![3].author).toBe(p!.author);
       expect(p!.comments![3].post).toBe(p);
 
@@ -328,13 +328,13 @@ describe('Repo#upsert', () => {
       expect(a instanceof Author).toBe(true);
       expect(a!.id).toBe(10);
       expect(a!.state).toBe('loaded');
-      expect(a!.attributes).toEqual({id: 10});
+      expect(a!.record).toEqual({id: 10});
       expect(a!.posts).toEqual([p]);
 
       expect(c instanceof Comment).toBe(true);
       expect(c!.id).toBe(1);
       expect(c!.state).toBe('loaded');
-      expect(c!.attributes).toEqual({id: 1});
+      expect(c!.record).toEqual({id: 1});
       expect(c!.post).toBe(p);
 
       expect(p instanceof Post).toBe(true);
@@ -382,8 +382,8 @@ describe('Repo#upsert', () => {
       const a = q.models.find(m => m?.id === 3);
 
       expect(a instanceof Author).toBe(true);
-      expect(a!.attributes.firstName).toBe('Bartholomew');
-      expect(a!.attributes.lastName).toBe('Simpson');
+      expect(a!.record.firstName).toBe('Bartholomew');
+      expect(a!.record.lastName).toBe('Simpson');
     });
   });
 });
@@ -408,13 +408,13 @@ describe('Repo#upsertQuery', () => {
     expect(as!.models.length).toBe(3);
     expect(as!.models[0] instanceof Author).toBe(true);
     expect(as!.models[0]!.id).toBe(1);
-    expect(as!.models[0]!.attributes.firstName).toBe('Homer');
+    expect(as!.models[0]!.record.firstName).toBe('Homer');
     expect(as!.models[1] instanceof Author).toBe(true);
     expect(as!.models[1]!.id).toBe(2);
-    expect(as!.models[1]!.attributes.firstName).toBe('Marge');
+    expect(as!.models[1]!.record.firstName).toBe('Marge');
     expect(as!.models[2] instanceof Author).toBe(true);
     expect(as!.models[2]!.id).toBe(3);
-    expect(as!.models[2]!.attributes.firstName).toBe('Bart');
+    expect(as!.models[2]!.record.firstName).toBe('Bart');
   });
 
   describe('with paging parameters', () => {
@@ -437,13 +437,13 @@ describe('Repo#upsertQuery', () => {
       expect(as!.models.length).toBe(10);
       expect(as!.models[0] instanceof Author).toBe(true);
       expect(as!.models[0]!.id).toBe(1);
-      expect(as!.models[0]!.attributes.firstName).toBe('Homer');
+      expect(as!.models[0]!.record.firstName).toBe('Homer');
       expect(as!.models[1] instanceof Author).toBe(true);
       expect(as!.models[1]!.id).toBe(2);
-      expect(as!.models[1]!.attributes.firstName).toBe('Marge');
+      expect(as!.models[1]!.record.firstName).toBe('Marge');
       expect(as!.models[2] instanceof Author).toBe(true);
       expect(as!.models[2]!.id).toBe(3);
-      expect(as!.models[2]!.attributes.firstName).toBe('Bart');
+      expect(as!.models[2]!.record.firstName).toBe('Bart');
       for (let i = 3; i <= 9; i++) {
         expect(as!.models[i]).toBeUndefined();
       }
@@ -466,25 +466,25 @@ describe('Repo#upsertQuery', () => {
       expect(as!.models.length).toBe(10);
       expect(as!.models[0] instanceof Author).toBe(true);
       expect(as!.models[0]!.id).toBe(1);
-      expect(as!.models[0]!.attributes.firstName).toBe('Homer');
+      expect(as!.models[0]!.record.firstName).toBe('Homer');
       expect(as!.models[1] instanceof Author).toBe(true);
       expect(as!.models[1]!.id).toBe(2);
-      expect(as!.models[1]!.attributes.firstName).toBe('Marge');
+      expect(as!.models[1]!.record.firstName).toBe('Marge');
       expect(as!.models[2] instanceof Author).toBe(true);
       expect(as!.models[2]!.id).toBe(3);
-      expect(as!.models[2]!.attributes.firstName).toBe('Bart');
+      expect(as!.models[2]!.record.firstName).toBe('Bart');
       expect(as!.models[3]).toBeUndefined();
       expect(as!.models[4]).toBeUndefined();
       expect(as!.models[5]).toBeUndefined();
       expect(as!.models[6] instanceof Author).toBe(true);
       expect(as!.models[6]!.id).toBe(7);
-      expect(as!.models[6]!.attributes.firstName).toBe('Ned');
+      expect(as!.models[6]!.record.firstName).toBe('Ned');
       expect(as!.models[7] instanceof Author).toBe(true);
       expect(as!.models[7]!.id).toBe(8);
-      expect(as!.models[7]!.attributes.firstName).toBe('Maude');
+      expect(as!.models[7]!.record.firstName).toBe('Maude');
       expect(as!.models[8] instanceof Author).toBe(true);
       expect(as!.models[8]!.id).toBe(9);
-      expect(as!.models[8]!.attributes.firstName).toBe('Chief');
+      expect(as!.models[8]!.record.firstName).toBe('Chief');
       expect(as!.models[9]).toBeUndefined();
     });
   });
@@ -502,7 +502,7 @@ describe('Repo#fetch', () => {
     expect(p instanceof Post).toBe(true);
     expect(p!.id).toBe(1);
     expect(p!.state).toBe('fetching');
-    expect(p!.attributes).toEqual({id: 1});
+    expect(p!.record).toEqual({id: 1});
 
     const result = await a();
 
@@ -512,7 +512,7 @@ describe('Repo#fetch', () => {
     expect(p instanceof Post).toBe(true);
     expect(p!.id).toBe(1);
     expect(p!.state).toBe('loaded');
-    expect(p!.attributes).toEqual({id: 1, title: 'First Post!'});
+    expect(p!.record).toEqual({id: 1, title: 'First Post!'});
   });
 
   describe('when an error occurs', () => {
@@ -527,7 +527,7 @@ describe('Repo#fetch', () => {
       expect(p instanceof Post).toBe(true);
       expect(p!.id).toBe(99999);
       expect(p!.state).toBe('fetching');
-      expect(p!.attributes).toEqual({id: 99999});
+      expect(p!.record).toEqual({id: 99999});
       expect(p!.errors).toEqual({});
 
       const result = await a();
@@ -538,7 +538,7 @@ describe('Repo#fetch', () => {
       expect(p instanceof Post).toBe(true);
       expect(p!.id).toBe(99999);
       expect(p!.state).toBe('loaded');
-      expect(p!.attributes).toEqual({id: 99999});
+      expect(p!.record).toEqual({id: 99999});
       expect(p!.errors).toEqual({base: 'boom'});
     });
   });
@@ -569,7 +569,7 @@ describe('Repo#query', () => {
     expect(q!.models.length).toEqual(authors.length);
     expect(q!.models[0] instanceof Author).toBe(true);
     expect(q!.models[0]!.id).toBe(1);
-    expect(q!.models[0]!.attributes).toEqual({
+    expect(q!.models[0]!.record).toEqual({
       id: 1,
       firstName: 'Homer',
       lastName: 'Simpson',
@@ -644,14 +644,14 @@ describe('Repo#query', () => {
       expect(flanders instanceof Query).toBe(true);
       expect(flanders!.state).toBe('loaded');
 
-      expect(simpsons!.models.map(a => a?.attributes.firstName)).toEqual([
+      expect(simpsons!.models.map(a => a?.record.firstName)).toEqual([
         'Homer',
         'Marge',
         'Bart',
         'Lisa',
         'Maggie',
       ]);
-      expect(flanders!.models.map(a => a?.attributes.firstName)).toEqual([
+      expect(flanders!.models.map(a => a?.record.firstName)).toEqual([
         'Ned',
         'Maude',
         'Rod',
