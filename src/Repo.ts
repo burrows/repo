@@ -1,5 +1,5 @@
 import hash from 'object-hash';
-import Model, {ModelClass} from './Model';
+import Model, {RawRecord, Options, ModelClass} from './Model';
 import Query from './Query';
 
 // models:
@@ -86,7 +86,7 @@ type MapperResult =
   | {
       type: 'fetch:success';
       modelClass: ModelClass<any>;
-      record: Record<string, any>;
+      record: RawRecord;
     }
   | {
       type: 'fetch:error';
@@ -97,14 +97,14 @@ type MapperResult =
   | {
       type: 'query:success';
       modelClass: ModelClass<any>;
-      options: Record<string, unknown>;
-      records: Record<string, unknown>[];
+      options: Options;
+      records: RawRecord[];
       paging?: {page: number; pageSize: number; count: number};
     }
   | {
       type: 'query:error';
       modelClass: ModelClass<any>;
-      options: Record<string, unknown>;
+      options: Options;
       error: string;
     };
 
@@ -120,14 +120,14 @@ export default class Repo {
 
   upsertQuery<M extends Model>(
     modelClass: ModelClass<M>,
-    options: Record<string, unknown>,
+    options: Options,
     {
       records,
       state = 'loaded',
       paging,
       error,
     }: {
-      records?: Record<string, unknown>[];
+      records?: RawRecord[];
       state?: Query<M>['state'];
       paging?: {page: number; pageSize: number; count: number};
       error?: string;
@@ -198,7 +198,7 @@ export default class Repo {
   // Inserts or updates the given records into the repo.
   upsert<M extends Model>(
     klass: ModelClass<M>,
-    records: Record<string, unknown> | Record<string, unknown>[],
+    records: RawRecord | RawRecord[],
     {
       state = 'loaded',
       errors = {},
@@ -465,7 +465,7 @@ export default class Repo {
 
   getQuery<M extends Model>(
     modelClass: ModelClass<M>,
-    options: Record<string, unknown>,
+    options: Options,
   ): Query<M> | undefined {
     const queryId = `${modelClass.name}:${hash(options)}`;
     return this.queries[queryId] as Query<M>;
@@ -474,7 +474,7 @@ export default class Repo {
   fetch<M extends Model>(
     modelClass: ModelClass<M>,
     id: M['id'],
-    options?: Record<string, unknown>,
+    options?: Options,
   ): [Repo, MapperAction] {
     const r = this.upsert(modelClass, {id}, {state: 'fetching'});
     const action = (): Promise<MapperResult> => {
@@ -493,7 +493,7 @@ export default class Repo {
 
   query<M extends Model>(
     modelClass: ModelClass<M>,
-    options: Record<string, unknown>,
+    options: Options,
     paging?: {page: number; pageSize?: number},
   ): [Repo, MapperAction] {
     const r = this.upsertQuery(modelClass, options, {state: 'getting'});

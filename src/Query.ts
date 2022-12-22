@@ -1,11 +1,11 @@
-import Model, {ModelClass} from './Model';
+import Model, {Options, ModelClass} from './Model';
 
 export type QueryState = 'new' | 'getting' | 'loaded' | 'error';
 
 export default class Query<M extends Model> {
   public modelClass: ModelClass<M>;
   public state: QueryState;
-  public options: Record<string, unknown>;
+  public options: Options;
   public error?: string;
   public pageSize?: number;
   public models: (M | undefined)[];
@@ -20,7 +20,7 @@ export default class Query<M extends Model> {
       models = [],
     }: {
       state?: QueryState;
-      options?: Record<string, unknown>;
+      options?: Options;
       error?: string;
       pageSize?: number;
       models?: (M | undefined)[];

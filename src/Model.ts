@@ -4,36 +4,33 @@ import ajvFormats from 'ajv-formats';
 const ajv = new Ajv({allErrors: true});
 ajvFormats(ajv);
 
+export type RawRecord = Record<string, unknown>;
+export type Options = Record<string, unknown>;
+
 export interface Mapper {
-  fetch(
-    id: number | string,
-    options?: Record<string, unknown>,
-  ): Promise<Record<string, unknown>>;
+  fetch(id: number | string, options?: Options): Promise<RawRecord>;
 
   query(
-    options?: Record<string, unknown>,
+    options?: Options,
     paging?: {page: number; pageSize?: number},
   ): Promise<{
-    records: Record<string, unknown>[];
+    records: RawRecord[];
     paging?: {page: number; pageSize: number; count: number};
   }>;
 }
 
 export const NullMapper: Mapper = {
-  fetch(
-    _id: number | string,
-    _options: Record<string, unknown> = {},
-  ): Promise<Record<string, unknown>> {
+  fetch(_id: number | string, _options: Options = {}): Promise<RawRecord> {
     throw new Error(
       'Mapper.get not defined: set the static mapper property on your model to an object that implements the Mapper interface',
     );
   },
 
   query(
-    _options: Record<string, unknown>,
+    _options: Options,
     _paging?: {page: number; pageSize?: number},
   ): Promise<{
-    records: Record<string, unknown>[];
+    records: RawRecord[];
     paging?: {page: number; pageSize: number; count: number};
   }> {
     throw new Error(
@@ -51,8 +48,6 @@ export type ModelState = 'new' | 'fetching' | 'loaded';
 interface BaseRecord {
   id: string | number;
 }
-
-type RawRecord = Record<string, unknown>;
 
 interface Relations {
   [name: string]: Model[] | Model | null;

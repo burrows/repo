@@ -1,6 +1,6 @@
 import {FromSchema} from 'json-schema-to-ts';
 import Repo, {MapperAction} from './Repo';
-import Model, {NullMapper} from './Model';
+import Model, {NullMapper, Options} from './Model';
 import Query from './Query';
 
 const PostRecordSchema = {
@@ -16,7 +16,7 @@ const PostRecordSchema = {
 const PostMapper = {
   ...NullMapper,
 
-  fetch(id: number, _options: Record<string, unknown>) {
+  fetch(id: number, _options: Options) {
     switch (id) {
       case 1:
         return Promise.resolve({id: 1, title: 'First Post!'});
@@ -85,10 +85,7 @@ const authors = [
 const AuthorMapper = {
   ...NullMapper,
 
-  query(
-    options: Record<string, unknown>,
-    paging?: {page: number; pageSize?: number},
-  ) {
+  query(options: Options, paging?: {page: number; pageSize?: number}) {
     if (options.error) return Promise.reject(new Error('boom'));
 
     let records = options.lastName
