@@ -1,6 +1,6 @@
 import {FromSchema} from 'json-schema-to-ts';
 import Repo, {MapperAction} from './Repo';
-import Model, {NullMapper, Options} from './Model';
+import Model, {MapperError, NullMapper, Options} from './Model';
 import Query from './Query';
 
 const PostRecordSchema = {
@@ -16,6 +16,8 @@ const PostRecordSchema = {
 const PostMapper = {
   ...NullMapper,
 
+  nextId: 1,
+
   fetch(id: number, _options: Options) {
     switch (id) {
       case 1:
@@ -27,6 +29,22 @@ const PostMapper = {
       default:
         return Promise.reject(new Error('boom'));
     }
+  },
+
+  create(model: Post, options: Options = {}) {
+    if (options.error) {
+      return Promise.reject(new MapperError({title: 'invalid title'}));
+    }
+
+    return Promise.resolve({...model.record, id: this.nextId++});
+  },
+
+  update(model: Post, options: Options = {}) {
+    if (options.error) {
+      return Promise.reject(new MapperError({title: 'invalid title'}));
+    }
+
+    return Promise.resolve({...model.record});
   },
 };
 
@@ -740,6 +758,134 @@ describe('Repo#query', () => {
         10,
         11,
       ]);
+    });
+  });
+});
+
+describe('Repo#create', () => {
+  it(`returns a RepoAction that calls the mapper's create method`, async () => {
+    let r = new Repo();
+    let a: MapperAction;
+
+    let p: Post | undefined = new Post({record: {title: 'My Post'}});
+
+    expect(p.state).toBe('new');
+
+    [r, a] = r.create(p);
+
+    const result = await a();
+
+    expect(result.type).toBe('create:success');
+    if (result.type === 'create:success') {
+      expect(result.modelClass).toBe(Post);
+      const id = result.record!.id as number;
+
+      r = r.processMapperResult(result);
+
+      p = r.getModel(Post, id);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.id).toBe(id);
+      expect(p!.state).toBe('loaded');
+      expect(p!.record).toEqual({id, title: 'My Post'});
+    }
+  });
+
+  describe('when the mapper returns an error', () => {
+    it('makes the error available in the mapper result', async () => {
+      let r = new Repo();
+      let a: MapperAction;
+
+      let p: Post | undefined = new Post({record: {title: 'My Post'}});
+
+      expect(p.state).toBe('new');
+
+      [r, a] = r.create(p, {error: true});
+
+      const result = await a();
+
+      expect(result.type).toBe('create:error');
+      if (result.type === 'create:error') {
+        expect(result.model.record).toEqual(p.record);
+        expect(result.model.errors).toEqual({title: 'invalid title'});
+      }
+    });
+  });
+});
+
+describe('Repo#update', () => {
+  it(`sets the model state to updating and returns a RepoAction that calls the mapper's update method`, async () => {
+    let r = new Repo();
+    let a: MapperAction;
+
+    [r, a] = r.fetch(Post, 1);
+
+    r = r.processMapperResult(await a());
+
+    let p = r.getModel(Post, 1);
+
+    expect(p instanceof Post).toBe(true);
+    expect(p!.state).toBe('loaded');
+
+    p = p!.set({title: p!.record.title + ' (2)'});
+
+    [r, a] = r.update(p);
+
+    p = r.getModel(Post, 1);
+    expect(p instanceof Post).toBe(true);
+    expect(p!.state).toBe('updating');
+
+    r = r.processMapperResult(await a());
+
+    p = r.getModel(Post, 1);
+    expect(p instanceof Post).toBe(true);
+    expect(p!.state).toBe('loaded');
+    expect(p!.errors).toEqual({});
+    expect(p!.record).toEqual({id: 1, title: 'First Post! (2)'});
+  });
+
+  describe('when the mapper returns an error', () => {
+    it('adds the errors to the model', async () => {
+      let r = new Repo();
+      let a: MapperAction;
+
+      [r, a] = r.fetch(Post, 1);
+
+      r = r.processMapperResult(await a());
+
+      let p = r.getModel(Post, 1);
+
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+
+      p = p!.set({title: p!.record.title + ' (2)'});
+
+      [r, a] = r.update(p, {error: true});
+
+      p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('updating');
+
+      r = r.processMapperResult(await a());
+
+      p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+      expect(p!.errors).toEqual({title: 'invalid title'});
+      expect(p!.record).toEqual({id: 1, title: 'First Post! (2)'});
+
+      [r, a] = r.update(p!);
+
+      p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('updating');
+
+      r = r.processMapperResult(await a());
+
+      p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+      expect(p!.errors).toEqual({});
+      expect(p!.record).toEqual({id: 1, title: 'First Post! (2)'});
     });
   });
 });

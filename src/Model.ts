@@ -6,6 +6,18 @@ ajvFormats(ajv);
 
 export type RawRecord = Record<string, unknown>;
 export type Options = Record<string, unknown>;
+export interface Errors {
+  [attribute: string]: string;
+}
+
+export class MapperError extends Error {
+  public errors: Errors;
+
+  constructor(errors: Errors) {
+    super(JSON.stringify(errors));
+    this.errors = errors;
+  }
+}
 
 export interface Mapper {
   fetch(id: number | string, options?: Options): Promise<RawRecord>;
@@ -17,6 +29,10 @@ export interface Mapper {
     records: RawRecord[];
     paging?: {page: number; pageSize: number; count: number};
   }>;
+
+  create(model: Model, options?: Options): Promise<RawRecord>;
+
+  update(model: Model, options?: Options): Promise<RawRecord>;
 }
 
 export const NullMapper: Mapper = {
@@ -37,11 +53,21 @@ export const NullMapper: Mapper = {
       'Mapper.query not defined: set the static mapper property on your model to an object that implements the Mapper interface',
     );
   },
+
+  create(_model: Model, _options: Options = {}): Promise<RawRecord> {
+    throw new Error(
+      'Mapper.create not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+    );
+  },
+
+  update(_model: Model, _options: Options = {}): Promise<RawRecord> {
+    throw new Error(
+      'Mapper.update not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+    );
+  },
 };
 
-export type ModelState = 'new' | 'fetching' | 'loaded';
-// | 'creating'
-// | 'updating'
+export type ModelState = 'new' | 'fetching' | 'updating' | 'loaded';
 // | 'destroying'
 // | 'destroyed'
 
@@ -51,10 +77,6 @@ interface BaseRecord {
 
 interface Relations {
   [name: string]: Model[] | Model | null;
-}
-
-export interface Errors {
-  [attribute: string]: string;
 }
 
 interface ModelNewOpts {

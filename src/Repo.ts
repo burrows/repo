@@ -1,5 +1,11 @@
 import hash from 'object-hash';
-import Model, {RawRecord, Options, ModelClass} from './Model';
+import Model, {
+  Errors,
+  RawRecord,
+  Options,
+  ModelClass,
+  MapperError,
+} from './Model';
 import Query from './Query';
 
 // models:
@@ -106,6 +112,24 @@ type MapperResult =
       modelClass: ModelClass<any>;
       options: Options;
       error: string;
+    }
+  | {
+      type: 'create:success';
+      modelClass: ModelClass<any>;
+      record: RawRecord;
+    }
+  | {
+      type: 'create:error';
+      model: Model;
+    }
+  | {
+      type: 'update:success';
+      modelClass: ModelClass<any>;
+      record: RawRecord;
+    }
+  | {
+      type: 'update:error';
+      model: Model;
     };
 
 export type MapperAction = () => Promise<MapperResult>;
@@ -517,6 +541,56 @@ export default class Repo {
     return [r, action];
   }
 
+  create<M extends Model>(
+    model: M,
+    options?: Record<string, unknown>,
+  ): [Repo, MapperAction] {
+    const modelClass = model.ctor;
+
+    const action = (): Promise<MapperResult> => {
+      return modelClass.mapper.create(model, options).then(
+        record => ({type: 'create:success', modelClass, record}),
+        err => ({
+          type: 'create:error',
+          model: model.update({
+            errors:
+              err instanceof MapperError
+                ? err.errors
+                : {base: err instanceof Error ? err.message : String(err)},
+          }),
+        }),
+      );
+    };
+
+    return [this, action];
+  }
+
+  update<M extends Model>(
+    model: M,
+    options?: Record<string, unknown>,
+  ): [Repo, MapperAction] {
+    const modelClass = model.ctor;
+
+    const r = this.upsert(modelClass, {id: model.id}, {state: 'updating'});
+
+    const action = (): Promise<MapperResult> => {
+      return modelClass.mapper.update(model, options).then(
+        record => ({type: 'update:success', modelClass, record}),
+        err => ({
+          type: 'update:error',
+          model: model.update({
+            errors:
+              err instanceof MapperError
+                ? err.errors
+                : {base: err instanceof Error ? err.message : String(err)},
+          }),
+        }),
+      );
+    };
+
+    return [r, action];
+  }
+
   processMapperResult(result: MapperResult): Repo {
     switch (result.type) {
       case 'fetch:success':
@@ -537,6 +611,15 @@ export default class Repo {
         return this.upsertQuery(result.modelClass, result.options, {
           state: 'error',
           error: result.error,
+        });
+      case 'create:success':
+      case 'update:success':
+        return this.upsert(result.modelClass, result.record);
+      case 'create:error':
+        return this;
+      case 'update:error':
+        return this.upsert(result.model.ctor, result.model.record, {
+          errors: result.model.errors,
         });
     }
   }
