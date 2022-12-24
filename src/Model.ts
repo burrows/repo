@@ -131,9 +131,26 @@ const defaultRecord = (schema: any): any => {
   const a: any = {};
 
   for (const k of schema.required || []) {
-    let type = schema?.properties[k]?.type;
+    const prop = schema?.properties[k];
 
-    if (!type) continue;
+    if (!prop) {
+      throw new Error(
+        `Model.defaultRecord: missing property definition for property \`${k}\``,
+      );
+    }
+
+    if (prop.default) {
+      a[k] = prop.default;
+      break;
+    }
+
+    let type = prop.type;
+
+    if (!type) {
+      throw new Error(
+        `Model.defaultRecord: property \`${k}\` is missing a type`,
+      );
+    }
 
     if (Array.isArray(type)) {
       type = type[0];
