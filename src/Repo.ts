@@ -89,11 +89,7 @@ const isLoadable = (x: any): x is Loadable => {
 };
 
 type MapperResult =
-  | {
-      type: 'fetch:success';
-      modelClass: ModelClass<any>;
-      record: RawRecord;
-    }
+  | {type: 'fetch:success'; modelClass: ModelClass<any>; record: RawRecord}
   | {
       type: 'fetch:error';
       modelClass: ModelClass<any>;
@@ -113,24 +109,12 @@ type MapperResult =
       options: Options;
       error: string;
     }
-  | {
-      type: 'create:success';
-      modelClass: ModelClass<any>;
-      record: RawRecord;
-    }
-  | {
-      type: 'create:error';
-      model: Model;
-    }
-  | {
-      type: 'update:success';
-      modelClass: ModelClass<any>;
-      record: RawRecord;
-    }
-  | {
-      type: 'update:error';
-      model: Model;
-    };
+  | {type: 'create:success'; modelClass: ModelClass<any>; record: RawRecord}
+  | {type: 'create:error'; model: Model}
+  | {type: 'update:success'; modelClass: ModelClass<any>; record: RawRecord}
+  | {type: 'update:error'; model: Model}
+  | {type: 'delete:success'; modelClass: ModelClass<any>; record: RawRecord}
+  | {type: 'delete:error'; model: Model};
 
 export type MapperAction = () => Promise<MapperResult>;
 
@@ -541,10 +525,7 @@ export default class Repo {
     return [r, action];
   }
 
-  create<M extends Model>(
-    model: M,
-    options?: Record<string, unknown>,
-  ): [Repo, MapperAction] {
+  create<M extends Model>(model: M, options?: Options): [Repo, MapperAction] {
     const modelClass = model.ctor;
 
     const action = (): Promise<MapperResult> => {
@@ -565,10 +546,7 @@ export default class Repo {
     return [this, action];
   }
 
-  update<M extends Model>(
-    model: M,
-    options?: Record<string, unknown>,
-  ): [Repo, MapperAction] {
+  update<M extends Model>(model: M, options?: Options): [Repo, MapperAction] {
     const modelClass = model.ctor;
 
     const r = this.upsert(modelClass, {id: model.id}, {state: 'updating'});
@@ -578,6 +556,33 @@ export default class Repo {
         record => ({type: 'update:success', modelClass, record}),
         err => ({
           type: 'update:error',
+          model: model.update({
+            errors:
+              err instanceof MapperError
+                ? err.errors
+                : {base: err instanceof Error ? err.message : String(err)},
+          }),
+        }),
+      );
+    };
+
+    return [r, action];
+  }
+
+  delete<M extends Model>(model: M, options?: Options): [Repo, MapperAction] {
+    const modelClass = model.ctor;
+
+    const r = this.upsert(modelClass, {id: model.id}, {state: 'deleting'});
+
+    const action = (): Promise<MapperResult> => {
+      return modelClass.mapper.delete(model, options).then(
+        record => ({
+          type: 'delete:success',
+          modelClass,
+          record: record || {id: model.id},
+        }),
+        err => ({
+          type: 'delete:error',
           model: model.update({
             errors:
               err instanceof MapperError
@@ -615,9 +620,14 @@ export default class Repo {
       case 'create:success':
       case 'update:success':
         return this.upsert(result.modelClass, result.record);
+      case 'delete:success':
+        return this.upsert(result.modelClass, result.record, {
+          state: 'deleted',
+        });
       case 'create:error':
         return this;
       case 'update:error':
+      case 'delete:error':
         return this.upsert(result.model.ctor, result.model.record, {
           errors: result.model.errors,
         });

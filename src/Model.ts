@@ -33,6 +33,8 @@ export interface Mapper {
   create(model: Model, options?: Options): Promise<RawRecord>;
 
   update(model: Model, options?: Options): Promise<RawRecord>;
+
+  delete(model: Model, options?: Options): Promise<RawRecord | void>;
 }
 
 export const NullMapper: Mapper = {
@@ -65,11 +67,24 @@ export const NullMapper: Mapper = {
       'Mapper.update not defined: set the static mapper property on your model to an object that implements the Mapper interface',
     );
   },
+
+  delete(
+    _model: Model,
+    _options: Options = {},
+  ): Promise<RawRecord | undefined> {
+    throw new Error(
+      'Mapper.delete not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+    );
+  },
 };
 
-export type ModelState = 'new' | 'fetching' | 'updating' | 'loaded';
-// | 'destroying'
-// | 'destroyed'
+export type ModelState =
+  | 'new'
+  | 'fetching'
+  | 'updating'
+  | 'deleting'
+  | 'loaded'
+  | 'deleted';
 
 interface BaseRecord {
   id: string | number;

@@ -46,6 +46,14 @@ const PostMapper = {
 
     return Promise.resolve({...model.record});
   },
+
+  delete(model: Post, options: Options = {}) {
+    if (options.error) {
+      return Promise.reject(new MapperError({base: 'delete failed'}));
+    }
+
+    return Promise.resolve({id: model.id});
+  },
 };
 
 class Post extends Model<FromSchema<typeof PostRecordSchema>> {
@@ -886,6 +894,66 @@ describe('Repo#update', () => {
       expect(p!.state).toBe('loaded');
       expect(p!.errors).toEqual({});
       expect(p!.record).toEqual({id: 1, title: 'First Post! (2)'});
+    });
+  });
+});
+
+describe('Repo#delete', () => {
+  it(`sets the model state to deleting and returns a RepoAction that calls the mapper's delete method`, async () => {
+    let r = new Repo();
+    let a: MapperAction;
+
+    [r, a] = r.fetch(Post, 1);
+
+    r = r.processMapperResult(await a());
+
+    let p = r.getModel(Post, 1);
+
+    expect(p instanceof Post).toBe(true);
+    expect(p!.state).toBe('loaded');
+
+    [r, a] = r.delete(p!);
+
+    p = r.getModel(Post, 1);
+    expect(p instanceof Post).toBe(true);
+    expect(p!.state).toBe('deleting');
+
+    r = r.processMapperResult(await a());
+
+    p = r.getModel(Post, 1);
+    expect(p instanceof Post).toBe(true);
+    expect(p!.state).toBe('deleted');
+    expect(p!.errors).toEqual({});
+  });
+
+  describe('when the mapper returns an error', () => {
+    it('adds the errors to the model', async () => {
+      let r = new Repo();
+      let a: MapperAction;
+
+      [r, a] = r.fetch(Post, 1);
+
+      r = r.processMapperResult(await a());
+
+      let p = r.getModel(Post, 1);
+
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+
+      p = p!.set({title: p!.record.title + ' (2)'});
+
+      [r, a] = r.delete(p, {error: true});
+
+      p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('deleting');
+
+      r = r.processMapperResult(await a());
+
+      p = r.getModel(Post, 1);
+      expect(p instanceof Post).toBe(true);
+      expect(p!.state).toBe('loaded');
+      expect(p!.errors).toEqual({base: 'delete failed'});
     });
   });
 });
