@@ -24,7 +24,7 @@ export default class Query<M extends Model> {
       error?: string;
       pageSize?: number;
       models?: (M | undefined)[];
-    },
+    } = {},
   ) {
     this.modelClass = modelClass;
     this.state = state;
