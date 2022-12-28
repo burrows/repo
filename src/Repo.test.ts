@@ -840,6 +840,8 @@ describe('Repo#update', () => {
 
     p = p!.set({title: p!.record.title + ' (2)'});
 
+    expect(p.state).toBe('loaded');
+
     [r, a] = r.update(p);
 
     p = r.getModel(Post, 1);

@@ -98,6 +98,7 @@ interface ModelNewOpts {
   state?: ModelState;
   record?: RawRecord;
   errors?: Errors;
+  dirty?: {[attr: string]: boolean};
   relations?: Relations;
   validate?: boolean;
 }
@@ -193,11 +194,13 @@ export default class Model<R extends BaseRecord = {id: number}> {
   record: R;
   relations: Relations;
   errors: Errors;
+  dirty: {[attr: string]: boolean};
 
   constructor({
     state = 'new',
     record,
     errors = {},
+    dirty = {},
     relations,
     validate = true,
   }: ModelNewOpts = {}) {
@@ -216,6 +219,7 @@ export default class Model<R extends BaseRecord = {id: number}> {
     this.state = state;
     this.record = rec;
     this.errors = errors;
+    this.dirty = dirty;
     this.relations = relations || this.defaultRelations();
   }
 
@@ -249,20 +253,34 @@ export default class Model<R extends BaseRecord = {id: number}> {
     return errors.join(', ');
   }
 
+  get isDirty(): boolean {
+    return Object.keys(this.dirty).length > 0;
+  }
+
   set(record: Partial<R>): this {
-    return this.update({record: {...this.record, ...record}});
+    const dirty = Object.keys(record).reduce((acc, attr) => {
+      acc[attr] = true;
+      return acc;
+    }, {} as {[attr: string]: boolean});
+
+    return this.update({
+      record: {...this.record, ...record},
+      dirty: {...this.dirty, ...dirty},
+    });
   }
 
   update({
     state = this.state,
     record,
     errors = this.errors,
+    dirty = this.dirty,
     relations = this.relations,
   }: ModelUpdateOpts = {}): this {
     return new this.ctor({
       state,
       record: (record || this.record) as RawRecord,
       errors,
+      dirty,
       relations,
       validate: record !== this.record,
     });

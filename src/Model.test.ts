@@ -89,3 +89,26 @@ describe('Model#errorString', () => {
     expect(new Post({errors: {}}).errorString).toBe('');
   });
 });
+
+describe('Model#set', () => {
+  it('sets the given attributes and marks them as dirty', () => {
+    let post = new Post();
+
+    expect(post.record.title).toBe('');
+    expect(post.record.category).toBe('general');
+    expect(post.isDirty).toBe(false);
+    expect(post.dirty).toEqual({});
+
+    post = post.set({title: 'xyz'});
+    expect(post.record.title).toBe('xyz');
+    expect(post.record.category).toBe('general');
+    expect(post.isDirty).toBe(true);
+    expect(post.dirty).toEqual({title: true});
+
+    post = post.set({category: 'sports'});
+    expect(post.record.title).toBe('xyz');
+    expect(post.record.category).toBe('sports');
+    expect(post.isDirty).toBe(true);
+    expect(post.dirty).toEqual({title: true, category: true});
+  });
+});
