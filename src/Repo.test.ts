@@ -9,7 +9,7 @@ const PostRecordSchema = {
   additionalProperties: false,
   properties: {
     id: {type: 'integer'},
-    title: {type: 'string', minLength: 1},
+    title: {type: 'string', minLength: 1, default: 'New Post'},
   },
 } as const;
 
@@ -58,6 +58,7 @@ const PostMapper = {
 
 class Post extends Model<FromSchema<typeof PostRecordSchema>> {
   static mapper = PostMapper;
+  static schema = PostRecordSchema;
 
   static get relations() {
     return {
@@ -89,8 +90,8 @@ const AuthorRecordSchema = {
   additionalProperties: false,
   properties: {
     id: {type: 'integer'},
-    firstName: {type: 'string', minLength: 1},
-    lastName: {type: 'string', minLength: 1},
+    firstName: {type: 'string', minLength: 1, default: 'First'},
+    lastName: {type: 'string', minLength: 1, default: 'Last'},
   },
 } as const;
 
@@ -136,6 +137,7 @@ const AuthorMapper = {
 
 class Author extends Model<FromSchema<typeof AuthorRecordSchema>> {
   static mapper = AuthorMapper;
+  static schema = AuthorRecordSchema;
 
   static get relations() {
     return {
@@ -172,6 +174,8 @@ const CommentRecordSchema = {
 } as const;
 
 class Comment extends Model<FromSchema<typeof CommentRecordSchema>> {
+  static schema = CommentRecordSchema;
+
   static get relations() {
     return {
       author: {
@@ -351,13 +355,13 @@ describe('Repo#upsert', () => {
       expect(a instanceof Author).toBe(true);
       expect(a!.id).toBe(10);
       expect(a!.state).toBe('loaded');
-      expect(a!.record).toEqual({id: 10});
+      expect(a!.record).toEqual({id: 10, firstName: 'First', lastName: 'Last'});
       expect(a!.posts).toEqual([p]);
 
       expect(c instanceof Comment).toBe(true);
       expect(c!.id).toBe(1);
       expect(c!.state).toBe('loaded');
-      expect(c!.record).toEqual({id: 1});
+      expect(c!.record).toEqual({id: 1, text: ''});
       expect(c!.post).toBe(p);
 
       expect(p instanceof Post).toBe(true);
@@ -525,7 +529,7 @@ describe('Repo#fetch', () => {
     expect(p instanceof Post).toBe(true);
     expect(p!.id).toBe(1);
     expect(p!.state).toBe('fetching');
-    expect(p!.record).toEqual({id: 1});
+    expect(p!.record).toEqual({id: 1, title: 'New Post'});
 
     const result = await a();
 
@@ -550,7 +554,7 @@ describe('Repo#fetch', () => {
       expect(p instanceof Post).toBe(true);
       expect(p!.id).toBe(99999);
       expect(p!.state).toBe('fetching');
-      expect(p!.record).toEqual({id: 99999});
+      expect(p!.record).toEqual({id: 99999, title: 'New Post'});
       expect(p!.errors).toEqual({});
 
       const result = await a();
@@ -561,7 +565,7 @@ describe('Repo#fetch', () => {
       expect(p instanceof Post).toBe(true);
       expect(p!.id).toBe(99999);
       expect(p!.state).toBe('loaded');
-      expect(p!.record).toEqual({id: 99999});
+      expect(p!.record).toEqual({id: 99999, title: 'New Post'});
       expect(p!.errors).toEqual({base: 'boom'});
     });
   });

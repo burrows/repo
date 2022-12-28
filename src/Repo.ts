@@ -88,7 +88,7 @@ const isLoadable = (x: any): x is Loadable => {
   return false;
 };
 
-type MapperResult =
+export type MapperResult =
   | {type: 'fetch:success'; modelClass: ModelClass<any>; record: RawRecord}
   | {
       type: 'fetch:error';

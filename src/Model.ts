@@ -141,7 +141,7 @@ const defaultRecord = (schema: any): any => {
 
     if (prop.default) {
       a[k] = prop.default;
-      break;
+      continue;
     }
 
     let type = prop.type;
@@ -201,7 +201,7 @@ export default class Model<R extends BaseRecord = {id: number}> {
     relations,
     validate = true,
   }: ModelNewOpts = {}) {
-    const rec = (record || defaultRecord(this.ctor.schema)) as R;
+    const rec = {...defaultRecord(this.ctor.schema), ...record} as R;
 
     if (validate) {
       const validator = ajv.compile(this.ctor.schema);

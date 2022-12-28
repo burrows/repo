@@ -9,7 +9,11 @@ const PostRecordSchema = {
   properties: {
     id: {type: 'integer'},
     title: {type: 'string'},
-    category: {type: 'string', default: 'general'},
+    category: {
+      type: 'string',
+      default: 'general',
+      enum: ['general', 'sports', 'tech'],
+    },
   },
 } as const;
 
@@ -43,24 +47,24 @@ describe('Model constructor', () => {
 
   it('throws an error when the given record does not match the schema', () => {
     expect(() => {
-      new Post({record: {}});
-    }).toThrow(
-      new Error(
-        `Post: record failed validation: data must have required property 'id', data must have required property 'title', data must have required property 'category'`,
-      ),
-    );
-
-    expect(() => {
-      new Post({record: {id: 1, title: 2, category: 'foo'}});
+      new Post({record: {id: 1, title: 2, category: 'sports'}});
     }).toThrow(
       new Error(`Post: record failed validation: data/title must be string`),
     );
 
     expect(() => {
-      new Post({record: {id: 1, title: 'foo', x: 'y', category: 'foo'}});
+      new Post({record: {id: 1, title: 'foo', x: 'y', category: 'tech'}});
     }).toThrow(
       new Error(
         `Post: record failed validation: data must NOT have additional properties`,
+      ),
+    );
+
+    expect(() => {
+      new Post({record: {category: 'foo'}});
+    }).toThrow(
+      new Error(
+        `Post: record failed validation: data/category must be equal to one of the allowed values`,
       ),
     );
   });
