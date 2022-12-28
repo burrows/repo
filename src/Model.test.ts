@@ -69,3 +69,23 @@ describe('Model constructor', () => {
     );
   });
 });
+
+describe('Model#hasError', () => {
+  it('returns true when there are errors and false otherwise', () => {
+    expect(new Post({errors: {base: 'foo'}}).hasError).toBe(true);
+    expect(new Post({errors: {title: 'foo', category: 'bar'}}).hasError).toBe(
+      true,
+    );
+    expect(new Post({errors: {}}).hasError).toBe(false);
+  });
+});
+
+describe('Model#errorString', () => {
+  it('returns a string containing all errors', () => {
+    expect(new Post({errors: {base: 'foo'}}).errorString).toBe('base: foo');
+    expect(
+      new Post({errors: {title: 'foo', category: 'bar'}}).errorString,
+    ).toBe('title: foo, category: bar');
+    expect(new Post({errors: {}}).errorString).toBe('');
+  });
+});

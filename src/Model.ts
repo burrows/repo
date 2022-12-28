@@ -235,6 +235,20 @@ export default class Model<R extends BaseRecord = {id: number}> {
     return `${this.name}|${this.id}`;
   }
 
+  get hasError(): boolean {
+    return Object.keys(this.errors).length > 0;
+  }
+
+  get errorString(): string {
+    const errors: string[] = [];
+
+    for (const attr in this.errors) {
+      errors.push(`${attr}: ${this.errors[attr]}`);
+    }
+
+    return errors.join(', ');
+  }
+
   set(record: Partial<R>): this {
     return this.update({record: {...this.record, ...record}});
   }
