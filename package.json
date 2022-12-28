@@ -2,7 +2,9 @@
   "name": "repo",
   "version": "0.0.0",
   "description": "Immutable Model Repository",
-  "main": "build/index.js",
+  "main": "build/umd/index.js",
+  "module": "build/es/index.js",
+  "types": "build/types/index.d.ts",
   "dependencies": {
     "ajv": "^8.11.2",
     "ajv-formats": "^2.1.1",
@@ -18,8 +20,11 @@
   },
   "scripts": {
     "test": "npx jest",
-    "build": "npx tsc"
+    "build": "npx tsc && npx tsc -p ./tsconfig.umd.json",
+    "clean": "rm -rf ./build"
   },
   "author": "Corey Burrows <corey.burrows@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": "https://github.com/burrows/repo",
+  "homepage": "https://github.com/burrows/repo"
 }

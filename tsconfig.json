@@ -1,11 +1,11 @@
 {
   "include": ["src/**/*"],
   "compilerOptions": {
-    "outDir": "build",
+    "outDir": "build/es",
     "declarationDir": "build/types",
     "declaration": true,
-    "target": "es2016",
-    "module": "umd",
+    "target": "es6",
+    "module": "esnext",
     "jsx": "preserve",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
