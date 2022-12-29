@@ -1,5 +1,11 @@
 import Repo, {MapperAction, MapperResult} from './Repo';
-import Model, {Mapper, MapperError, NullMapper, RawRecord} from './Model';
+import Model, {
+  Mapper,
+  MapperError,
+  NullMapper,
+  RawRecord,
+  Options,
+} from './Model';
 import Query from './Query';
 
 export {
@@ -11,5 +17,7 @@ export {
   MapperResult,
   NullMapper,
   RawRecord,
+  Options,
 };
+
 export default Repo;
