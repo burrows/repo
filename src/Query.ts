@@ -45,11 +45,13 @@ export default class Query<M extends Model> {
   update({
     state,
     models,
+    pageSize,
     pendingPages,
     error,
   }: {
     state?: QueryState;
     models?: (M | undefined)[];
+    pageSize?: number;
     pendingPages?: {[page: number]: boolean};
     error?: string;
   }): Query<M> {
@@ -57,6 +59,7 @@ export default class Query<M extends Model> {
       options: this.options,
       state: state || this.state,
       models: models || this.models,
+      pageSize: pageSize ?? this.pageSize,
       pendingPages: pendingPages || this.pendingPages,
       error: error || this.error,
     });

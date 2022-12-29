@@ -195,7 +195,13 @@ export default class Repo {
         delete pendingPages[page];
       }
 
-      query = query.update({state, error, models, pendingPages});
+      query = query.update({
+        state,
+        error,
+        models,
+        pendingPages,
+        pageSize: paging?.pageSize,
+      });
     }
 
     queries[queryId] = query;
