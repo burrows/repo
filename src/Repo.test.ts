@@ -455,12 +455,14 @@ describe('Repo#upsertQuery', () => {
             {id: 2, firstName: 'Marge', lastName: 'Simpson'},
             {id: 3, firstName: 'Bart', lastName: 'Simpson'},
           ],
-          paging: {page: 0, pageSize: 3, count: 10},
+          page: 0,
+          paging: {pageSize: 3, count: 10},
         },
       );
 
       let as = r.getQuery(Author, {});
       expect(as instanceof Query).toBe(true);
+      expect(as!.pendingPages).toEqual({});
       expect(as!.models.length).toBe(10);
       expect(as!.models[0] instanceof Author).toBe(true);
       expect(as!.models[0]!.id).toBe(1);
@@ -484,12 +486,14 @@ describe('Repo#upsertQuery', () => {
             {id: 8, firstName: 'Maude', lastName: 'Flanders'},
             {id: 9, firstName: 'Chief', lastName: 'Wiggum'},
           ],
-          paging: {page: 2, pageSize: 3, count: 10},
+          page: 2,
+          paging: {pageSize: 3, count: 10},
         },
       );
 
       as = r.getQuery(Author, {});
       expect(as instanceof Query).toBe(true);
+      expect(as!.pendingPages).toEqual({});
       expect(as!.models.length).toBe(10);
       expect(as!.models[0] instanceof Author).toBe(true);
       expect(as!.models[0]!.id).toBe(1);
@@ -699,6 +703,7 @@ describe('Repo#query', () => {
       expect(q instanceof Query).toBe(true);
       expect(q!.modelClass).toBe(Author);
       expect(q!.state).toBe('getting');
+      expect(q!.pendingPages).toEqual({[0]: true});
       expect(q!.models).toEqual([]);
 
       r = r.processMapperResult(await a());
@@ -708,6 +713,7 @@ describe('Repo#query', () => {
       expect(q instanceof Query).toBe(true);
       expect(q!.modelClass).toBe(Author);
       expect(q!.state).toBe('loaded');
+      expect(q!.pendingPages).toEqual({});
       expect(q!.models.length).toEqual(11);
       expect(q!.models.map(m => m?.id)).toEqual([
         1,
@@ -725,6 +731,10 @@ describe('Repo#query', () => {
 
       [r, a] = r.query(Author, {}, {page: 1});
 
+      q = r.getQuery(Author, {});
+      expect(q!.state).toBe('getting');
+      expect(q!.pendingPages).toEqual({[1]: true});
+
       r = r.processMapperResult(await a());
 
       q = r.getQuery(Author, {});
@@ -732,6 +742,7 @@ describe('Repo#query', () => {
       expect(q instanceof Query).toBe(true);
       expect(q!.modelClass).toBe(Author);
       expect(q!.state).toBe('loaded');
+      expect(q!.pendingPages).toEqual({});
       expect(q!.models.length).toEqual(11);
       expect(q!.models.map(m => m?.id)).toEqual([
         1,
@@ -749,6 +760,10 @@ describe('Repo#query', () => {
 
       [r, a] = r.query(Author, {}, {page: 3});
 
+      q = r.getQuery(Author, {});
+      expect(q!.state).toBe('getting');
+      expect(q!.pendingPages).toEqual({[3]: true});
+
       r = r.processMapperResult(await a());
 
       q = r.getQuery(Author, {});
@@ -756,6 +771,7 @@ describe('Repo#query', () => {
       expect(q instanceof Query).toBe(true);
       expect(q!.modelClass).toBe(Author);
       expect(q!.state).toBe('loaded');
+      expect(q!.pendingPages).toEqual({});
       expect(q!.models.length).toEqual(11);
       expect(q!.models.map(m => m?.id)).toEqual([
         1,

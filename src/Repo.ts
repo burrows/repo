@@ -1,11 +1,5 @@
 import hash from 'object-hash';
-import Model, {
-  Errors,
-  RawRecord,
-  Options,
-  ModelClass,
-  MapperError,
-} from './Model';
+import Model, {RawRecord, Options, ModelClass, MapperError} from './Model';
 import Query from './Query';
 
 // models:
@@ -132,12 +126,14 @@ export default class Repo {
     {
       records,
       state = 'loaded',
+      page = 0,
       paging,
       error,
     }: {
       records?: RawRecord[];
       state?: Query<M>['state'];
-      paging?: {page: number; pageSize: number; count: number};
+      page?: number;
+      paging?: {pageSize: number; count: number};
       error?: string;
     } = {},
   ): Repo {
@@ -164,7 +160,7 @@ export default class Repo {
         models = [];
         models.length = paging.count;
         models.splice(
-          paging.page * paging.pageSize,
+          page * paging.pageSize,
           loadedModels.length,
           ...loadedModels,
         );
@@ -176,6 +172,7 @@ export default class Repo {
         error,
         pageSize: paging?.pageSize,
         models,
+        pendingPages: state === 'getting' ? {[page]: true} : {},
       });
     } else {
       let models: (M | undefined)[] | undefined = loadedModels;
@@ -184,13 +181,21 @@ export default class Repo {
         models = query.models.slice();
         models.length = paging.count;
         models.splice(
-          paging.page * paging.pageSize,
+          page * paging.pageSize,
           loadedModels.length,
           ...loadedModels,
         );
       }
 
-      query = query.update({state, error, models});
+      let pendingPages = {...query.pendingPages};
+
+      if (state === 'getting') {
+        pendingPages[page] = true;
+      } else {
+        delete pendingPages[page];
+      }
+
+      query = query.update({state, error, models, pendingPages});
     }
 
     queries[queryId] = query;
@@ -504,7 +509,10 @@ export default class Repo {
     options: Options,
     paging?: {page: number; pageSize?: number},
   ): [Repo, MapperAction] {
-    const r = this.upsertQuery(modelClass, options, {state: 'getting'});
+    const r = this.upsertQuery(modelClass, options, {
+      state: 'getting',
+      page: paging?.page,
+    });
     const action = (): Promise<MapperResult> => {
       return modelClass.mapper.query(options, paging).then(
         ({records, paging}) => ({
@@ -610,7 +618,13 @@ export default class Repo {
         return this.upsertQuery(result.modelClass, result.options, {
           state: 'loaded',
           records: result.records,
-          paging: result.paging,
+          page: result.paging?.page,
+          paging: result.paging
+            ? {
+                pageSize: result.paging.pageSize,
+                count: result.paging.count,
+              }
+            : undefined,
         });
       case 'query:error':
         return this.upsertQuery(result.modelClass, result.options, {

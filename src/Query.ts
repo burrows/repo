@@ -9,6 +9,7 @@ export default class Query<M extends Model> {
   public error?: string;
   public pageSize?: number;
   public models: (M | undefined)[];
+  public pendingPages: {[page: number]: boolean};
 
   constructor(
     modelClass: ModelClass<M>,
@@ -18,12 +19,14 @@ export default class Query<M extends Model> {
       error,
       pageSize,
       models = [],
+      pendingPages = {},
     }: {
       state?: QueryState;
       options?: Options;
       error?: string;
       pageSize?: number;
       models?: (M | undefined)[];
+      pendingPages?: {[page: number]: boolean};
     } = {},
   ) {
     this.modelClass = modelClass;
@@ -32,21 +35,29 @@ export default class Query<M extends Model> {
     this.error = error;
     this.pageSize = pageSize;
     this.models = models;
+    this.pendingPages = pendingPages;
+  }
+
+  isPagePending(page: number): boolean {
+    return page in this.pendingPages;
   }
 
   update({
     state,
     models,
+    pendingPages,
     error,
   }: {
     state?: QueryState;
     models?: (M | undefined)[];
+    pendingPages?: {[page: number]: boolean};
     error?: string;
   }): Query<M> {
     return new Query(this.modelClass, {
       options: this.options,
       state: state || this.state,
       models: models || this.models,
+      pendingPages: pendingPages || this.pendingPages,
       error: error || this.error,
     });
   }
