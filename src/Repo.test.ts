@@ -521,6 +521,86 @@ describe('Repo#upsertQuery', () => {
   });
 });
 
+describe('Repo#expunge', () => {
+  it('removes the given model from the repo', () => {
+    let r = new Repo().upsert(Post, {id: 1, title: 'a'});
+
+    let p = r.getModel(Post, 1);
+
+    expect(p instanceof Post).toBe(true);
+    expect(p!.id).toBe(1);
+
+    r = r.expunge(Post, 1);
+
+    p = r.getModel(Post, 1);
+    expect(p).toBeUndefined();
+  });
+
+  it('removes the given model from existing queries', () => {
+    let r = new Repo().upsertQuery(
+      Author,
+      {},
+      {
+        records: [
+          {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+          {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+          {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+        ],
+      },
+    );
+
+    let as = r.getQuery(Author, {});
+
+    expect(as).toBeDefined();
+    expect(as!.models.map(m => m?.id)).toEqual([1, 2, 3]);
+
+    r = r.expunge(Author, 2);
+
+    as = r.getQuery(Author, {});
+
+    expect(as).toBeDefined();
+    expect(as!.models.map(m => m?.id)).toEqual([1, 3]);
+  });
+});
+
+describe('Repo#expungeQuery', () => {
+  it('removes the given query and its models from the repo', () => {
+    let r = new Repo().upsertQuery(
+      Author,
+      {},
+      {
+        records: [
+          {id: 1, firstName: 'Homer', lastName: 'Simpson'},
+          {id: 2, firstName: 'Marge', lastName: 'Simpson'},
+          {id: 3, firstName: 'Bart', lastName: 'Simpson'},
+        ],
+      },
+    );
+
+    let as = r.getQuery(Author, {});
+    let a1 = r.getModel(Author, 1);
+    let a2 = r.getModel(Author, 2);
+    let a3 = r.getModel(Author, 3);
+
+    expect(as).toBeDefined();
+    expect(a1).toBeDefined();
+    expect(a2).toBeDefined();
+    expect(a3).toBeDefined();
+
+    r = r.expungeQuery(Author, {});
+
+    as = r.getQuery(Author, {});
+    a1 = r.getModel(Author, 1);
+    a2 = r.getModel(Author, 2);
+    a3 = r.getModel(Author, 3);
+
+    expect(as).toBeUndefined();
+    expect(a1).toBeUndefined();
+    expect(a2).toBeUndefined();
+    expect(a3).toBeUndefined();
+  });
+});
+
 describe('Repo#fetch', () => {
   it(`adds an empty model and returns a RepoAction that calls the mapper's fetch method`, async () => {
     let r = new Repo();

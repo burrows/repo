@@ -2,57 +2,6 @@ import hash from 'object-hash';
 import Model, {RawRecord, Options, ModelClass, MapperError} from './Model';
 import Query from './Query';
 
-// models:
-//   {
-//     'Post:1': Post({id: 1, ...}),
-//     'Post:2': Post({id: 2, ...}),
-//     'Comment:1': Comment({id: 1, ...}),
-//     'Comment:2': Comment({id: 2, ...}),
-//     'Comment:3': Comment({id: 3, ...}),
-//     'Comment:4': Comment({id: 4, ...}),
-//     'Author:1': Author({id: 1, ...}),
-//     'Author:2': Author({id: 2, ...}),
-//     'Author:3': Author({id: 3, ...}),
-//   }
-//
-// relations:
-//   {
-//     'Post:1:author': 'Author:1',
-//     'Post:1:comments': ['Comment:1', 'Comment:2'],
-//     'Post:2:author': 'Author:1',
-//     'Post:2:comments': ['Comment:3', 'Comment:4'],
-//     'Comment:1:post': 'Post:1',
-//     'Comment:1:author': 'Author:2',
-//     'Comment:2:post': 'Post:1',
-//     'Comment:2:author': 'Author:3',
-//     'Comment:3:post': 'Post:2',
-//     'Comment:3:author': 'Author:2',
-//     'Comment:4:post': 'Post:2',
-//     'Comment:4:author': 'Author:3',
-//     'Author:1:posts': ['Post:1', 'Post:2'],
-//     'Author:1:comments': [],
-//     'Author:2:posts': [],
-//     'Author:2:comments': ['Comment:1', 'Comment:2'3,
-//     'Author:3:posts': [],
-//     'Author:3:comments': ['Comment:2', 'Comment:4'],
-//   }
-//
-// queries:
-//   {
-//     'Post:<hash1>': Query<Post>({options: {...}, models: [...], ...}),
-//     'Post:<hash2>': Query<Post>({options: {...}, models: [...], ...}),
-//   }
-//
-// results:
-//   {
-//     'Post:1': {'Post:<hash1>': true},
-//     'Post:2': {'Post:<hash1>': true},
-//     'Post:3': {'Post:<hash1>': true},
-//     'Post:10': {'Post:<hash2>': true},
-//     'Post:11': {'Post:<hash2>': true},
-//     'Post:12': {'Post:<hash2>': true},
-//   }
-
 interface ModelMap {
   [key: string]: Model;
 }
@@ -150,7 +99,7 @@ export default class Repo {
     const queries = {...this.queries};
     const results = {...this.results};
 
-    const queryId = `${modelClass.name}:${hash(options)}`;
+    const queryId = `${modelClass.name}|${hash(options)}`;
     let query = this.queries[queryId] as Query<M>;
 
     if (!query) {
@@ -475,6 +424,63 @@ export default class Repo {
     return new Repo(models, relations, queries, this.results);
   }
 
+  expunge<M extends Model>(modelClass: ModelClass<M>, id: M['id']): Repo {
+    const models = {...this.models};
+    const relations = {...this.relations};
+    const queries = {...this.queries};
+    const results = {...this.results};
+
+    const modelKey = `${modelClass.name}|${id}`;
+
+    delete models[modelKey];
+
+    for (const relationName in modelClass.relations) {
+      delete relations[`${modelKey}|${relationName}`];
+    }
+
+    const queryKeys = results[modelKey];
+
+    for (const queryKey in queryKeys) {
+      let query = queries[queryKey];
+
+      if (!query) continue;
+
+      const idx = query.models.findIndex(m => m?.id === id);
+
+      if (idx >= 0) {
+        const models = query.models.slice();
+        models.splice(idx, 1);
+        query = query.update({models});
+        queries[queryKey] = query;
+      }
+    }
+
+    delete results[modelKey];
+
+    return new Repo(models, relations, queries, results);
+  }
+
+  expungeQuery<M extends Model>(
+    modelClass: ModelClass<M>,
+    options: Options,
+  ): Repo {
+    const query = this.getQuery(modelClass, options);
+    const queries = {...this.queries};
+
+    delete queries[`${modelClass.name}|${hash(options)}`];
+
+    let repo = new Repo(this.models, this.relations, queries, this.results);
+
+    if (query) {
+      for (const model of query.models) {
+        if (!model) continue;
+        repo = repo.expunge(modelClass, model.id);
+      }
+    }
+
+    return repo;
+  }
+
   getModel<M extends Model>(
     modelClass: ModelClass<M>,
     id: M['id'],
@@ -486,7 +492,7 @@ export default class Repo {
     modelClass: ModelClass<M>,
     options: Options,
   ): Query<M> | undefined {
-    const queryId = `${modelClass.name}:${hash(options)}`;
+    const queryId = `${modelClass.name}|${hash(options)}`;
     return this.queries[queryId] as Query<M>;
   }
 
@@ -654,19 +660,3 @@ export default class Repo {
     }
   }
 }
-
-// let r = new Repo();
-// let a: RepoAction;
-// [r, a] = r.fetch(Person, 1);
-// a().then((result) => {
-//   r = r.processResult(result);
-// });
-//
-// class RepoActionExec {
-//   constructor(public action: RepoAction) {}
-//   exec(send: SendFn<Evt>) {
-//     this.action().then((result) => {
-//       send({type: 'REPO_ACTION_EXEC_RESULT', result});
-//     });
-//   }
-// }
