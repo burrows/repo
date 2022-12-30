@@ -10,10 +10,6 @@ interface QueryMap {
   [key: string]: Query<Model>;
 }
 
-interface ResultMap {
-  [key: string]: {[key: string]: true};
-}
-
 type Loadable = {id: string | number};
 
 const isLoadable = (x: any): x is Loadable => {
@@ -61,7 +57,7 @@ export default class Repo {
   constructor(
     private models: ModelMap = {},
     private queries: QueryMap = {},
-    private results: ResultMap = {},
+    private queryIndex: {[modelKey: string]: {[queryKey: string]: true}} = {},
   ) {}
 
   upsertQuery<M extends Model>(
@@ -92,7 +88,7 @@ export default class Repo {
     }
 
     const queries = {...this.queries};
-    const results = {...this.results};
+    const queryIndex = {...this.queryIndex};
 
     const queryId = `${modelClass.name}|${hash(options)}`;
     let query = this.queries[queryId] as Query<M>;
@@ -151,11 +147,11 @@ export default class Repo {
     queries[queryId] = query;
 
     for (const model of loadedModels || []) {
-      results[model.key] = results[model.key] || {};
-      results[model.key][queryId] = true;
+      queryIndex[model.key] = queryIndex[model.key] || {};
+      queryIndex[model.key][queryId] = true;
     }
 
-    return new Repo(repo.models, queries, results);
+    return new Repo(repo.models, queries, queryIndex);
   }
 
   // Inserts or updates the given records into the repo.
@@ -325,8 +321,8 @@ export default class Repo {
         model = models[model.key] = upserted[model.key] = model.update();
       }
 
-      if (this.results[model.key]) {
-        for (const queryId of Object.keys(this.results[model.key])) {
+      if (this.queryIndex[model.key]) {
+        for (const queryId of Object.keys(this.queryIndex[model.key])) {
           let query = queries[queryId];
           query = query.update({
             models: query.models.map(m => (m?.id === model!.id ? model! : m)),
@@ -377,19 +373,19 @@ export default class Repo {
       }
     }
 
-    return new Repo(models, queries, this.results);
+    return new Repo(models, queries, this.queryIndex);
   }
 
   expunge<M extends Model>(modelClass: ModelClass<M>, id: M['id']): Repo {
     const models = {...this.models};
     const queries = {...this.queries};
-    const results = {...this.results};
+    const queryIndex = {...this.queryIndex};
 
     const modelKey = `${modelClass.name}|${id}`;
 
     delete models[modelKey];
 
-    const queryKeys = results[modelKey];
+    const queryKeys = queryIndex[modelKey];
 
     for (const queryKey in queryKeys) {
       let query = queries[queryKey];
@@ -406,9 +402,9 @@ export default class Repo {
       }
     }
 
-    delete results[modelKey];
+    delete queryIndex[modelKey];
 
-    return new Repo(models, queries, results);
+    return new Repo(models, queries, queryIndex);
   }
 
   expungeQuery<M extends Model>(
@@ -420,7 +416,7 @@ export default class Repo {
 
     delete queries[`${modelClass.name}|${hash(options)}`];
 
-    let repo = new Repo(this.models, queries, this.results);
+    let repo = new Repo(this.models, queries, this.queryIndex);
 
     if (query) {
       for (const model of query.models) {
