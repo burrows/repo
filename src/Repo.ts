@@ -10,10 +10,6 @@ interface QueryMap {
   [key: string]: Query<Model>;
 }
 
-interface RelationMap {
-  [key: string]: string[] | string | null;
-}
-
 interface ResultMap {
   [key: string]: {[key: string]: true};
 }
@@ -64,7 +60,6 @@ export type MapperAction = () => Promise<MapperResult>;
 export default class Repo {
   constructor(
     private models: ModelMap = {},
-    private relations: RelationMap = {},
     private queries: QueryMap = {},
     private results: ResultMap = {},
   ) {}
@@ -160,7 +155,7 @@ export default class Repo {
       results[model.key][queryId] = true;
     }
 
-    return new Repo(repo.models, repo.relations, queries, results);
+    return new Repo(repo.models, queries, results);
   }
 
   // Inserts or updates the given records into the repo.
@@ -173,16 +168,16 @@ export default class Repo {
     }: {state?: Model['state']; errors?: Model['errors']} = {},
   ): Repo {
     const models = {...this.models};
-    const relations = {...this.relations};
     const queries = {...this.queries};
-    const updated: {[key: string]: Model} = {};
+    const upserted: {[key: string]: Model} = {};
+    const relations: {[key: string]: string[] | string | null} = {};
 
-    const queue = Array.isArray(records)
+    const recordQueue = Array.isArray(records)
       ? records.map(r => ({modelClass: klass, record: r}))
       : [{modelClass: klass, record: records}];
-    let item: typeof queue[number] | undefined;
+    let item: typeof recordQueue[number] | undefined;
 
-    while ((item = queue.shift())) {
+    while ((item = recordQueue.shift())) {
       const {modelClass} = item;
       let {record} = item;
 
@@ -192,14 +187,14 @@ export default class Repo {
         );
       }
 
-      const loadKey = `${modelClass.name}|${record.id}`;
+      const modelKey = `${modelClass.name}|${record.id}`;
 
       // process relations
       for (const relationName in modelClass.relations) {
         if (!(relationName in record)) continue;
 
         const relation = modelClass.relations[relationName];
-        const relationKey = `${loadKey}|${relationName}`;
+        const relationKey = `${modelKey}|${relationName}`;
         const inverseRelation = relation.inverse
           ? relation.modelClass.relations[relation.inverse]
           : undefined;
@@ -217,38 +212,18 @@ export default class Repo {
                 );
               }
 
-              // clear stale inverse relations
-              if (inverseRelation && relations[relationKey]) {
-                for (const relatedKey of relations[relationKey]!) {
-                  const inverseRelationKey = `${relatedKey}|${relation.inverse}`;
-
-                  if (!relations[inverseRelationKey]) continue;
-
-                  switch (inverseRelation.cardinality) {
-                    case 'many':
-                      relations[inverseRelationKey] = (relations[
-                        inverseRelationKey
-                      ] as string[]).filter(k => k !== loadKey);
-                      break;
-                    case 'one':
-                      relations[inverseRelationKey] = null;
-                      break;
-                  }
-                }
-              }
-
               const relatedKeys: string[] = [];
 
               for (const r of related) {
                 if (isLoadable(r)) {
                   relatedKeys.push(`${relation.modelClass.name}|${r.id}`);
-                  queue.push({
+                  recordQueue.push({
                     modelClass: relation.modelClass,
                     record: r,
                   });
                 } else if (typeof r === 'number' || typeof r === 'string') {
                   relatedKeys.push(`${relation.modelClass.name}|${r}`);
-                  queue.push({
+                  recordQueue.push({
                     modelClass: relation.modelClass,
                     record: {id: r},
                   });
@@ -269,10 +244,10 @@ export default class Repo {
                         relations[`${relatedKey}|${relation.inverse}`] || [];
                       (relations[
                         `${relatedKey}|${relation.inverse}`
-                      ] as string[]).push(loadKey);
+                      ] as string[]).push(modelKey);
                       break;
                     case 'one':
-                      relations[`${relatedKey}|${relation.inverse}`] = loadKey;
+                      relations[`${relatedKey}|${relation.inverse}`] = modelKey;
                       break;
                   }
                 }
@@ -281,25 +256,6 @@ export default class Repo {
             break;
           case 'one':
             {
-              // clear stale inverse relations
-              if (inverseRelation && relations[relationKey]) {
-                const relatedKey = relations[relationKey];
-                const inverseRelationKey = `${relatedKey}|${relation.inverse}`;
-
-                if (relations[inverseRelationKey]) {
-                  switch (inverseRelation.cardinality) {
-                    case 'many':
-                      relations[inverseRelationKey] = (relations[
-                        inverseRelationKey
-                      ] as string[]).filter(k => k !== loadKey);
-                      break;
-                    case 'one':
-                      relations[inverseRelationKey] = null;
-                      break;
-                  }
-                }
-              }
-
               let relatedKey: string | null = null;
 
               if (related === null) {
@@ -307,7 +263,7 @@ export default class Repo {
               } else if (isLoadable(related)) {
                 relatedKey = `${relation.modelClass.name}|${related.id}`;
                 relations[relationKey] = relatedKey;
-                queue.push({
+                recordQueue.push({
                   modelClass: relation.modelClass,
                   record: related,
                 });
@@ -317,7 +273,7 @@ export default class Repo {
               ) {
                 relatedKey = `${relation.modelClass.name}|${related}`;
                 relations[relationKey] = relatedKey;
-                queue.push({
+                recordQueue.push({
                   modelClass: relation.modelClass,
                   record: {id: related},
                 });
@@ -330,10 +286,10 @@ export default class Repo {
                       relations[`${relatedKey}|${relation.inverse}`] || [];
                     (relations[
                       `${relatedKey}|${relation.inverse}`
-                    ] as string[]).push(loadKey);
+                    ] as string[]).push(modelKey);
                     break;
                   case 'one':
-                    relations[`${relatedKey}|${relation.inverse}`] = loadKey;
+                    relations[`${relatedKey}|${relation.inverse}`] = modelKey;
                     break;
                 }
               }
@@ -342,7 +298,7 @@ export default class Repo {
         }
       }
 
-      let model = models[loadKey];
+      let model = models[modelKey];
 
       if (model) {
         model = model.update({
@@ -354,19 +310,19 @@ export default class Repo {
         model = new modelClass({state, record, errors});
       }
 
-      models[loadKey] = updated[loadKey] = model;
+      models[modelKey] = upserted[modelKey] = model;
     }
 
-    const relationQueue = Object.values(updated);
+    const modelQueue = Object.values(upserted);
     const processed: {[key: string]: true} = {};
     let model: Model | undefined;
 
-    while ((model = relationQueue.shift())) {
+    while ((model = modelQueue.shift())) {
       if (processed[model.key]) continue;
       processed[model.key] = true;
 
-      if (!updated[model.key]) {
-        model = models[model.key] = updated[model.key] = model.update();
+      if (!upserted[model.key]) {
+        model = models[model.key] = upserted[model.key] = model.update();
       }
 
       if (this.results[model.key]) {
@@ -390,13 +346,13 @@ export default class Repo {
               const relatedModels: Model[] = [];
               for (const relatedKey of relatedKeys) {
                 let relatedModel = models[relatedKey];
-                if (!updated[relatedModel.key]) {
-                  relatedModel = models[relatedModel.key] = updated[
+                if (!upserted[relatedModel.key]) {
+                  relatedModel = models[relatedModel.key] = upserted[
                     relatedModel.key
                   ] = relatedModel.update();
                 }
                 relatedModels.push(relatedModel);
-                relationQueue.push(relatedModel);
+                modelQueue.push(relatedModel);
               }
               model.relations[relationName] = relatedModels;
             }
@@ -407,12 +363,12 @@ export default class Repo {
                 relations[`${model.key}|${relationName}`] || null;
               if (relatedKey) {
                 let relatedModel = models[relatedKey as string];
-                if (!updated[relatedModel.key]) {
-                  relatedModel = models[relatedModel.key] = updated[
+                if (!upserted[relatedModel.key]) {
+                  relatedModel = models[relatedModel.key] = upserted[
                     relatedModel.key
                   ] = relatedModel.update();
                 }
-                relationQueue.push(relatedModel);
+                modelQueue.push(relatedModel);
                 model.relations[relationName] = relatedModel;
               }
             }
@@ -421,22 +377,17 @@ export default class Repo {
       }
     }
 
-    return new Repo(models, relations, queries, this.results);
+    return new Repo(models, queries, this.results);
   }
 
   expunge<M extends Model>(modelClass: ModelClass<M>, id: M['id']): Repo {
     const models = {...this.models};
-    const relations = {...this.relations};
     const queries = {...this.queries};
     const results = {...this.results};
 
     const modelKey = `${modelClass.name}|${id}`;
 
     delete models[modelKey];
-
-    for (const relationName in modelClass.relations) {
-      delete relations[`${modelKey}|${relationName}`];
-    }
 
     const queryKeys = results[modelKey];
 
@@ -457,7 +408,7 @@ export default class Repo {
 
     delete results[modelKey];
 
-    return new Repo(models, relations, queries, results);
+    return new Repo(models, queries, results);
   }
 
   expungeQuery<M extends Model>(
@@ -469,7 +420,7 @@ export default class Repo {
 
     delete queries[`${modelClass.name}|${hash(options)}`];
 
-    let repo = new Repo(this.models, this.relations, queries, this.results);
+    let repo = new Repo(this.models, queries, this.results);
 
     if (query) {
       for (const model of query.models) {
