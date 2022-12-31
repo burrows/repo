@@ -373,6 +373,28 @@ describe('Repo#upsert', () => {
       expect(p!.comments![0].id).toBe(1);
       expect(p!.comments![0]).toBe(c);
     });
+
+    it('updates existing relations not specified in the data', () => {
+      let r = new Repo().upsert(Post, {
+        id: 1,
+        title: 'post 1',
+        author: {id: 10, firstName: 'Homer', lastName: 'Simpson'},
+      });
+
+      let a = r.getModel(Author, 10);
+
+      expect(a instanceof Author).toBe(true);
+      expect(a!.posts[0].id).toBe(1);
+      expect(a!.posts[0].record.title).toBe('post 1');
+
+      r = r.upsert(Post, {id: 1, title: 'post 1 edited'});
+
+      a = r.getModel(Author, 10);
+
+      expect(a instanceof Author).toBe(true);
+      expect(a!.posts[0].id).toBe(1);
+      expect(a!.posts[0].record.title).toBe('post 1 edited');
+    });
   });
 
   describe('with queries present', () => {
