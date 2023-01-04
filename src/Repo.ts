@@ -6,8 +6,20 @@ interface ModelMap {
   [key: string]: Model;
 }
 
+interface RelationMap {
+  [key: string]: string[] | string | null;
+}
+
 interface QueryMap {
   [key: string]: Query<Model>;
+}
+
+interface RelationIndex {
+  [modelKey: string]: {[relationKey: string]: true};
+}
+
+interface QueryIndex {
+  [modelKey: string]: {[queryKey: string]: true};
 }
 
 type Loadable = {id: string | number};
@@ -54,11 +66,25 @@ export type MapperResult =
 export type MapperAction = () => Promise<MapperResult>;
 
 export default class Repo {
-  constructor(
-    private models: ModelMap = {},
-    private queries: QueryMap = {},
-    private queryIndex: {[modelKey: string]: {[queryKey: string]: true}} = {},
-  ) {}
+  private modelMap: ModelMap;
+  private relationMap: RelationMap;
+  private queryMap: QueryMap;
+  private relationIndex: RelationIndex;
+  private queryIndex: QueryIndex;
+
+  constructor(opts?: {
+    modelMap: ModelMap;
+    relationMap: RelationMap;
+    queryMap: QueryMap;
+    relationIndex: RelationIndex;
+    queryIndex: QueryIndex;
+  }) {
+    this.modelMap = opts?.modelMap || {};
+    this.relationMap = opts?.relationMap || {};
+    this.queryMap = opts?.queryMap || {};
+    this.relationIndex = opts?.relationIndex || {};
+    this.queryIndex = opts?.queryIndex || {};
+  }
 
   upsertQuery<M extends Model>(
     modelClass: ModelClass<M>,
@@ -81,17 +107,17 @@ export default class Repo {
     let loadedModels: M[] | undefined;
 
     if (records) {
-      repo = this.upsert(modelClass, records);
+      repo = repo.upsert(modelClass, records);
       loadedModels = records.map(
         r => repo.getModel(modelClass, r.id as M['id'])!,
       );
     }
 
-    const queries = {...this.queries};
-    const queryIndex = {...this.queryIndex};
+    const queryMap = {...repo.queryMap};
+    const queryIndex = {...repo.queryIndex};
 
     const queryId = `${modelClass.name}|${hash(options)}`;
-    let query = this.queries[queryId] as Query<M>;
+    let query = repo.queryMap[queryId] as Query<M>;
 
     if (!query) {
       let models = loadedModels || [];
@@ -144,14 +170,20 @@ export default class Repo {
       });
     }
 
-    queries[queryId] = query;
+    queryMap[queryId] = query;
 
     for (const model of loadedModels || []) {
       queryIndex[model.key] = queryIndex[model.key] || {};
       queryIndex[model.key][queryId] = true;
     }
 
-    return new Repo(repo.models, queries, queryIndex);
+    return new Repo({
+      modelMap: repo.modelMap,
+      relationMap: repo.relationMap,
+      relationIndex: repo.relationIndex,
+      queryMap,
+      queryIndex,
+    });
   }
 
   // Inserts or updates the given records into the repo.
@@ -163,10 +195,11 @@ export default class Repo {
       errors = {},
     }: {state?: Model['state']; errors?: Model['errors']} = {},
   ): Repo {
-    const models = {...this.models};
-    const queries = {...this.queries};
-    const upserted: {[key: string]: Model} = {};
-    const relations: {[key: string]: string[] | string | null} = {};
+    const modelMap = {...this.modelMap};
+    const relationMap = {...this.relationMap};
+    const relationIndex = {...this.relationIndex};
+    const queryMap = {...this.queryMap};
+    const dirtyModelKeys: {[key: string]: true} = {};
 
     const recordQueue = Array.isArray(records)
       ? records.map(r => ({modelClass: klass, record: r}))
@@ -198,6 +231,28 @@ export default class Repo {
         const {[relationName]: related, ...remaining} = record;
         record = remaining;
 
+        // clear stale inverse relations
+        if (inverseRelation && relationMap[relationKey]) {
+          for (const relatedKey of relationMap[relationKey]!) {
+            const inverseRelationKey = `${relatedKey}|${relation.inverse}`;
+
+            if (!relationMap[inverseRelationKey]) continue;
+
+            delete relationIndex[relatedKey][relationKey];
+
+            switch (inverseRelation.cardinality) {
+              case 'many':
+                relationMap[inverseRelationKey] = (relationMap[
+                  inverseRelationKey
+                ] as string[]).filter(k => k !== modelKey);
+                break;
+              case 'one':
+                relationMap[inverseRelationKey] = null;
+                break;
+            }
+          }
+        }
+
         // load related records
         switch (relation.cardinality) {
           case 'many':
@@ -211,90 +266,118 @@ export default class Repo {
               const relatedKeys: string[] = [];
 
               for (const r of related) {
+                let relatedKey: string;
+                let relatedRecord: RawRecord;
+
                 if (isLoadable(r)) {
-                  relatedKeys.push(`${relation.modelClass.name}|${r.id}`);
-                  recordQueue.push({
-                    modelClass: relation.modelClass,
-                    record: r,
-                  });
+                  relatedKey = `${relation.modelClass.name}|${r.id}`;
+                  relatedKeys.push(relatedKey);
+                  relatedRecord = r;
                 } else if (typeof r === 'number' || typeof r === 'string') {
-                  relatedKeys.push(`${relation.modelClass.name}|${r}`);
-                  recordQueue.push({
-                    modelClass: relation.modelClass,
-                    record: {id: r},
-                  });
+                  relatedKey = `${relation.modelClass.name}|${r}`;
+                  relatedKeys.push(relatedKey);
+                  relatedRecord = {id: r};
                 } else {
                   throw new Error(
                     `Repo#load: ${modelClass.name}(${record.id}) received unloadable to-many \`${relationName}\` record`,
                   );
                 }
-              }
 
-              relations[relationKey] = relatedKeys;
+                if (inverseRelation) {
+                  const inverseRelationKey = `${relatedKey}|${relation.inverse}`;
 
-              if (inverseRelation) {
-                for (const relatedKey of relatedKeys) {
+                  relationIndex[modelKey] = relationIndex[modelKey] || {};
+                  relationIndex[modelKey][inverseRelationKey] = true;
+
                   switch (inverseRelation.cardinality) {
                     case 'many':
-                      relations[`${relatedKey}|${relation.inverse}`] =
-                        relations[`${relatedKey}|${relation.inverse}`] || [];
-                      (relations[
-                        `${relatedKey}|${relation.inverse}`
-                      ] as string[]).push(modelKey);
+                      relationMap[inverseRelationKey] =
+                        relationMap[inverseRelationKey] || [];
+                      if (
+                        !relationMap[inverseRelationKey]!.includes(modelKey)
+                      ) {
+                        (relationMap[inverseRelationKey] as string[]).push(
+                          modelKey,
+                        );
+                      }
                       break;
                     case 'one':
-                      relations[`${relatedKey}|${relation.inverse}`] = modelKey;
+                      relationMap[inverseRelationKey] = modelKey;
                       break;
                   }
                 }
+
+                recordQueue.push({
+                  modelClass: relation.modelClass,
+                  record: relatedRecord,
+                });
+
+                relationIndex[relatedKey] = relationIndex[relatedKey] || {};
+                relationIndex[relatedKey][relationKey] = true;
               }
+
+              relationMap[relationKey] = relatedKeys;
             }
             break;
           case 'one':
             {
               let relatedKey: string | null = null;
+              let relatedRecord: Loadable | null = null;
 
               if (related === null) {
-                relations[relationKey] = null;
+                relatedRecord = null;
               } else if (isLoadable(related)) {
                 relatedKey = `${relation.modelClass.name}|${related.id}`;
-                relations[relationKey] = relatedKey;
-                recordQueue.push({
-                  modelClass: relation.modelClass,
-                  record: related,
-                });
+                relatedRecord = related;
               } else if (
                 typeof related === 'string' ||
                 typeof related === 'number'
               ) {
                 relatedKey = `${relation.modelClass.name}|${related}`;
-                relations[relationKey] = relatedKey;
-                recordQueue.push({
-                  modelClass: relation.modelClass,
-                  record: {id: related},
-                });
+                relatedRecord = {id: related};
               }
 
-              if (inverseRelation && relatedKey) {
-                switch (inverseRelation.cardinality) {
-                  case 'many':
-                    relations[`${relatedKey}|${relation.inverse}`] =
-                      relations[`${relatedKey}|${relation.inverse}`] || [];
-                    (relations[
-                      `${relatedKey}|${relation.inverse}`
-                    ] as string[]).push(modelKey);
-                    break;
-                  case 'one':
-                    relations[`${relatedKey}|${relation.inverse}`] = modelKey;
-                    break;
+              relationMap[relationKey] = relatedKey;
+
+              if (relatedRecord) {
+                if (inverseRelation) {
+                  const inverseRelationKey = `${relatedKey}|${relation.inverse}`;
+
+                  relationIndex[modelKey] = relationIndex[modelKey] || {};
+                  relationIndex[modelKey][inverseRelationKey] = true;
+
+                  switch (inverseRelation.cardinality) {
+                    case 'many':
+                      relationMap[inverseRelationKey] =
+                        relationMap[inverseRelationKey] || [];
+                      if (
+                        !relationMap[inverseRelationKey]!.includes(modelKey)
+                      ) {
+                        (relationMap[inverseRelationKey] as string[]).push(
+                          modelKey,
+                        );
+                      }
+                      break;
+                    case 'one':
+                      relationMap[inverseRelationKey] = modelKey;
+                      break;
+                  }
                 }
+
+                recordQueue.push({
+                  modelClass: relation.modelClass,
+                  record: relatedRecord,
+                });
+
+                relationIndex[relatedKey!] = relationIndex[relatedKey!] || {};
+                relationIndex[relatedKey!][relationKey] = true;
               }
             }
             break;
         }
       }
 
-      let model = models[modelKey];
+      let model = modelMap[modelKey];
 
       if (model) {
         model = model.update({
@@ -306,89 +389,121 @@ export default class Repo {
         model = new modelClass({state, record, errors});
       }
 
-      models[modelKey] = upserted[modelKey] = model;
+      modelMap[modelKey] = model;
+      dirtyModelKeys[modelKey] = true;
     }
 
-    const modelQueue = Object.values(upserted);
-    const processed: {[key: string]: true} = {};
-    let model: Model | undefined;
+    const dirtyModelQueue = Object.keys(dirtyModelKeys);
+    let modelKey: string | undefined;
+    while ((modelKey = dirtyModelQueue.shift())) {
+      dirtyModelKeys[modelKey] = true;
 
-    while ((model = modelQueue.shift())) {
-      if (processed[model.key]) continue;
-      processed[model.key] = true;
+      for (const relationKey in relationIndex[modelKey]) {
+        const relatedModelKey = relationKey
+          .split('|')
+          .slice(0, 2)
+          .join('|');
 
-      if (!upserted[model.key]) {
-        model = models[model.key] = upserted[model.key] = model.update();
-      }
-
-      if (this.queryIndex[model.key]) {
-        for (const queryId of Object.keys(this.queryIndex[model.key])) {
-          let query = queries[queryId];
-          query = query.update({
-            models: query.models.map(m => (m?.id === model!.id ? model! : m)),
-          });
-          queries[queryId] = query;
+        if (!(relatedModelKey in dirtyModelKeys)) {
+          modelMap[relatedModelKey] = modelMap[relatedModelKey].update();
+          dirtyModelQueue.push(relatedModelKey);
         }
       }
+    }
+
+    for (modelKey in dirtyModelKeys) {
+      const model = modelMap[modelKey];
 
       for (const relationName in model.ctor.relations) {
         const relation = model.ctor.relations[relationName];
+        const relationKey = `${modelKey}|${relationName}`;
+        const value = relationMap[relationKey];
+
+        if (value === undefined) continue;
 
         switch (relation.cardinality) {
           case 'many':
-            {
-              const relatedKeys =
-                relations[`${model.key}|${relationName}`] || [];
-              const relatedModels: Model[] = [];
-              for (const relatedKey of relatedKeys) {
-                let relatedModel = models[relatedKey];
-                if (!upserted[relatedModel.key]) {
-                  relatedModel = models[relatedModel.key] = upserted[
-                    relatedModel.key
-                  ] = relatedModel.update();
-                }
-                relatedModels.push(relatedModel);
-                modelQueue.push(relatedModel);
-              }
-              model.relations[relationName] = relatedModels;
-            }
+            model.relations[relationName] = (value as string[]).map(
+              k => modelMap[k],
+            );
             break;
           case 'one':
-            {
-              const relatedKey =
-                relations[`${model.key}|${relationName}`] || null;
-              if (relatedKey) {
-                let relatedModel = models[relatedKey as string];
-                if (!upserted[relatedModel.key]) {
-                  relatedModel = models[relatedModel.key] = upserted[
-                    relatedModel.key
-                  ] = relatedModel.update();
-                }
-                modelQueue.push(relatedModel);
-                model.relations[relationName] = relatedModel;
-              }
-            }
+            model.relations[relationName] = value
+              ? modelMap[value as string]
+              : null;
             break;
         }
       }
+
+      for (const queryKey in this.queryIndex[modelKey]) {
+        let query = queryMap[queryKey];
+        query = query.update({
+          models: query.models.map(m => (m?.id === model!.id ? model! : m)),
+        });
+        queryMap[queryKey] = query;
+      }
     }
 
-    return new Repo(models, queries, this.queryIndex);
+    return new Repo({
+      modelMap,
+      relationMap,
+      relationIndex,
+      queryMap,
+      queryIndex: this.queryIndex,
+    });
   }
 
+  // delete from modelMap
+  // use upsert to remove from all relations
+  // delete from relationIndex
+  // remove from queries
+  // delete from queryIndex
   expunge<M extends Model>(modelClass: ModelClass<M>, id: M['id']): Repo {
-    const models = {...this.models};
-    const queries = {...this.queries};
-    const queryIndex = {...this.queryIndex};
-
     const modelKey = `${modelClass.name}|${id}`;
+    const model = this.modelMap[modelKey];
 
-    delete models[modelKey];
+    if (!model) return this;
 
-    const queryKeys = queryIndex[modelKey];
+    let repo: Repo = this;
 
-    for (const queryKey in queryKeys) {
-      let query = queries[queryKey];
+    for (const relationKey in repo.relationIndex[modelKey]) {
+      const parts = relationKey.split('|');
+      const relatedModelKey = `${parts[0]}|${parts[1]}`;
+      const relationName = parts[2];
+      const relatedModel = repo.modelMap[relatedModelKey];
+      const relation = relatedModel.ctor.relations[relationName];
+
+      switch (relation.cardinality) {
+        case 'many':
+          repo = repo.upsert(relatedModel.ctor, {
+            id: relatedModel.id,
+            [relationName]: (relatedModel.relations[relationName] as Model[])
+              .filter(m => m.id !== id)
+              .map(m => m.id),
+          });
+          break;
+        case 'one':
+          repo = repo.upsert(relatedModel.ctor, {
+            id: relatedModel.id,
+            [relationName]: null,
+          });
+          break;
+      }
+    }
+
+    const modelMap = {...repo.modelMap};
+    const relationMap = {...repo.relationMap};
+    const queryMap = {...repo.queryMap};
+    const queryIndex = {...repo.queryIndex};
+
+    for (const relationName in model.relations) {
+      delete relationMap[`${modelKey}|${relationName}`];
+    }
+
+    delete modelMap[modelKey];
+
+    for (const queryKey in queryIndex[modelKey]) {
+      let query = queryMap[queryKey];
 
       if (!query) continue;
 
@@ -398,13 +513,19 @@ export default class Repo {
         const models = query.models.slice();
         models.splice(idx, 1);
         query = query.update({models});
-        queries[queryKey] = query;
+        queryMap[queryKey] = query;
       }
     }
 
     delete queryIndex[modelKey];
 
-    return new Repo(models, queries, queryIndex);
+    return new Repo({
+      modelMap,
+      relationMap,
+      relationIndex: repo.relationIndex,
+      queryMap,
+      queryIndex,
+    });
   }
 
   expungeQuery<M extends Model>(
@@ -412,11 +533,17 @@ export default class Repo {
     options: Options,
   ): Repo {
     const query = this.getQuery(modelClass, options);
-    const queries = {...this.queries};
+    const queryMap = {...this.queryMap};
 
-    delete queries[`${modelClass.name}|${hash(options)}`];
+    delete queryMap[`${modelClass.name}|${hash(options)}`];
 
-    let repo = new Repo(this.models, queries, this.queryIndex);
+    let repo = new Repo({
+      modelMap: this.modelMap,
+      relationMap: this.relationMap,
+      relationIndex: this.relationIndex,
+      queryMap,
+      queryIndex: this.queryIndex,
+    });
 
     if (query) {
       for (const model of query.models) {
@@ -432,7 +559,7 @@ export default class Repo {
     modelClass: ModelClass<M>,
     id: M['id'],
   ): M | undefined {
-    return this.models[`${modelClass.name}|${id}`] as M;
+    return this.modelMap[`${modelClass.name}|${id}`] as M;
   }
 
   getQuery<M extends Model>(
@@ -440,7 +567,7 @@ export default class Repo {
     options: Options,
   ): Query<M> | undefined {
     const queryId = `${modelClass.name}|${hash(options)}`;
-    return this.queries[queryId] as Query<M>;
+    return this.queryMap[queryId] as Query<M>;
   }
 
   fetch<M extends Model>(
