@@ -558,6 +558,70 @@ describe('Repo#expunge', () => {
     expect(p).toBeUndefined();
   });
 
+  it('removes the model from to-one relations', () => {
+    let r = new Repo().upsert(Post, {
+      id: 1,
+      title: 'a',
+      author: {id: 100, firstName: 'Homer', lastName: 'Simpson'},
+      comments: [
+        {id: 1, author: 99, text: 'a'},
+        {id: 2, author: 100, text: 'b'},
+        {id: 3, author: 101, text: 'c'},
+      ],
+    });
+
+    let p = r.getModel(Post, 1);
+    let c = r.getModel(Comment, 2);
+
+    expect(p).toBeDefined();
+    expect(p!.author?.id).toBe(100);
+    expect(p!.comments?.map(c => c.author?.id)).toEqual([99, 100, 101]);
+    expect(c).toBeDefined();
+    expect(c!.author?.id).toBe(100);
+    expect(p!.author).toBe(c!.author);
+
+    r = r.expunge(Author, 100);
+
+    expect(r.getModel(Author, 100)).toBeUndefined();
+
+    p = r.getModel(Post, 1);
+    c = r.getModel(Comment, 2);
+
+    expect(p).toBeDefined();
+    expect(p!.author).toBeNull();
+    expect(p!.comments?.map(c => c.author?.id)).toEqual([99, undefined, 101]);
+    expect(c).toBeDefined();
+    expect(c!.author).toBeNull();
+  });
+
+  it('removes the model from to-many relations', () => {
+    let r = new Repo().upsert(Post, {
+      id: 1,
+      title: 'a',
+      comments: [
+        {id: 1, text: 'a'},
+        {id: 2, text: 'b'},
+        {id: 3, text: 'c'},
+      ],
+    });
+
+    let p = r.getModel(Post, 1);
+    let c = r.getModel(Comment, 2);
+
+    expect(p).toBeDefined();
+    expect(p!.comments?.map(c => c.id)).toEqual([1, 2, 3]);
+    expect(c).toBeDefined();
+
+    r = r.expunge(Comment, 2);
+
+    p = r.getModel(Post, 1);
+    c = r.getModel(Comment, 2);
+
+    expect(p).toBeDefined();
+    expect(p!.comments?.map(c => c.id)).toEqual([1, 3]);
+    expect(c).toBeUndefined();
+  });
+
   it('removes the given model from existing queries', () => {
     let r = new Repo().upsertQuery(
       Author,
