@@ -52,7 +52,7 @@ const PostMapper = {
       return Promise.reject(new MapperError({base: 'delete failed'}));
     }
 
-    return Promise.resolve({id: model.id});
+    return Promise.resolve();
   },
 };
 
@@ -210,8 +210,17 @@ const CommentRecordSchema = {
   },
 } as const;
 
+const CommentMapper = {
+  ...NullMapper,
+
+  delete(_comment: Comment, _options: Options = {}) {
+    return Promise.resolve();
+  },
+};
+
 class Comment extends Model<FromSchema<typeof CommentRecordSchema>> {
   static schema = CommentRecordSchema;
+  static mapper = CommentMapper;
 
   static get relations() {
     return {
@@ -1248,9 +1257,59 @@ describe('Repo#delete', () => {
     r = r.processMapperResult(await a());
 
     p = r.getModel(Post, 1);
-    expect(p instanceof Post).toBe(true);
-    expect(p!.state).toBe('deleted');
-    expect(p!.errors).toEqual({});
+    expect(p).toBeUndefined();
+  });
+
+  it('removes the delete model from relations', async () => {
+    let a: MapperAction;
+    let r = new Repo().upsert(Post, {
+      id: 1,
+      title: 'post 1',
+      comments: [
+        {
+          id: 1,
+          text: 'comment 1',
+          author: {id: 20, firstName: 'Marge', lastName: 'Simpson'},
+        },
+        {
+          id: 2,
+          text: 'comment 2',
+          author: {id: 30, firstName: 'Bart', lastName: 'Simpson'},
+        },
+        {
+          id: 3,
+          text: 'comment 3',
+          author: {id: 20, firstName: 'Marge', lastName: 'Simpson'},
+        },
+      ],
+    });
+
+    let p = r.getModel(Post, 1);
+    let c = r.getModel(Comment, 2);
+    expect(p).toBeDefined();
+    expect(p!.state).toBe('loaded');
+    expect(c).toBeDefined();
+    expect(c!.state).toBe('loaded');
+    expect(p!.comments[1]).toBe(c);
+
+    [r, a] = r.delete(c!);
+
+    p = r.getModel(Post, 1);
+    c = r.getModel(Comment, 2);
+    expect(p).toBeDefined();
+    expect(p!.state).toBe('loaded');
+    expect(c).toBeDefined();
+    expect(c!.state).toBe('deleting');
+    expect(p!.comments[1]).toBe(c);
+
+    r = r.processMapperResult(await a());
+
+    p = r.getModel(Post, 1);
+    c = r.getModel(Comment, 2);
+    expect(p).toBeDefined();
+    expect(p!.state).toBe('loaded');
+    expect(c).toBeUndefined();
+    expect(p!.comments.map(c => c.id)).toEqual([1, 3]);
   });
 
   describe('when the mapper returns an error', () => {

@@ -34,7 +34,7 @@ export interface Mapper {
 
   update(model: Model, options?: Options): Promise<RawRecord>;
 
-  delete(model: Model, options?: Options): Promise<RawRecord | void>;
+  delete(model: Model, options?: Options): Promise<void>;
 }
 
 export const NullMapper: Mapper = {
@@ -68,10 +68,7 @@ export const NullMapper: Mapper = {
     );
   },
 
-  delete(
-    _model: Model,
-    _options: Options = {},
-  ): Promise<RawRecord | undefined> {
+  delete(_model: Model, _options: Options = {}): Promise<void> {
     throw new Error(
       'Mapper.delete not defined: set the static mapper property on your model to an object that implements the Mapper interface',
     );

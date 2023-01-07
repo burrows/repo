@@ -60,7 +60,7 @@ export type MapperResult =
   | {type: 'create:error'; model: Model}
   | {type: 'update:success'; modelClass: ModelClass<any>; record: RawRecord}
   | {type: 'update:error'; model: Model}
-  | {type: 'delete:success'; modelClass: ModelClass<any>; record: RawRecord}
+  | {type: 'delete:success'; modelClass: ModelClass<any>; id: string | number}
   | {type: 'delete:error'; model: Model};
 
 export type MapperAction = () => Promise<MapperResult>;
@@ -670,10 +670,10 @@ export default class Repo {
 
     const action = (): Promise<MapperResult> => {
       return modelClass.mapper.delete(model, options).then(
-        record => ({
+        () => ({
           type: 'delete:success',
           modelClass,
-          record: record || {id: model.id},
+          id: model.id,
         }),
         err => ({
           type: 'delete:error',
@@ -721,9 +721,7 @@ export default class Repo {
       case 'update:success':
         return this.upsert(result.modelClass, result.record);
       case 'delete:success':
-        return this.upsert(result.modelClass, result.record, {
-          state: 'deleted',
-        });
+        return this.expunge(result.modelClass, result.id);
       case 'create:error':
         return this;
       case 'update:error':
