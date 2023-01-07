@@ -72,6 +72,11 @@ class Post extends Model<FromSchema<typeof PostRecordSchema>> {
         modelClass: Comment,
         inverse: 'post',
       },
+      categories: {
+        cardinality: 'many' as const,
+        modelClass: Category,
+        inverse: 'posts',
+      },
     };
   }
 
@@ -81,6 +86,38 @@ class Post extends Model<FromSchema<typeof PostRecordSchema>> {
 
   get comments(): Comment[] {
     return this.relations.comments as Comment[];
+  }
+
+  get categories(): Category[] {
+    return this.relations.categories as Category[];
+  }
+}
+
+const CategoryRecordSchema = {
+  type: 'object',
+  required: ['id', 'name'],
+  additionalProperties: false,
+  properties: {
+    id: {type: 'integer'},
+    name: {type: 'string'},
+  },
+} as const;
+
+class Category extends Model<FromSchema<typeof CategoryRecordSchema>> {
+  static schema = CategoryRecordSchema;
+
+  static get relations() {
+    return {
+      posts: {
+        cardinality: 'many' as const,
+        modelClass: Post,
+        inverse: 'categories',
+      },
+    };
+  }
+
+  get posts(): Post[] {
+    return this.relations.posts as Post[];
   }
 }
 
@@ -374,7 +411,7 @@ describe('Repo#upsert', () => {
       expect(p!.comments![0]).toBe(c);
     });
 
-    it('updates existing relations not specified in the data', () => {
+    it('updates existing one-to-many relations not specified in the data', () => {
       let r = new Repo().upsert(Post, {
         id: 1,
         title: 'post 1',
@@ -394,6 +431,103 @@ describe('Repo#upsert', () => {
       expect(a instanceof Author).toBe(true);
       expect(a!.posts[0].id).toBe(1);
       expect(a!.posts[0].record.title).toBe('post 1 edited');
+    });
+
+    it('updates existing many-to-one relations not specified in the data', () => {
+      let r = new Repo().upsert(Post, {
+        id: 1,
+        title: 'post 1',
+        comments: [
+          {id: 1, text: 'a'},
+          {id: 2, text: 'b'},
+          {id: 3, text: 'c'},
+        ],
+      });
+
+      let c1 = r.getModel(Comment, 1);
+      let c2 = r.getModel(Comment, 2);
+      let c3 = r.getModel(Comment, 3);
+
+      expect(c1?.post?.id).toBe(1);
+      expect(c1?.post?.record.title).toBe('post 1');
+      expect(c2?.post?.id).toBe(1);
+      expect(c2?.post?.record.title).toBe('post 1');
+      expect(c3?.post?.id).toBe(1);
+      expect(c3?.post?.record.title).toBe('post 1');
+
+      r = r.upsert(Post, {id: 1, title: 'post 1 edited'});
+
+      c1 = r.getModel(Comment, 1);
+      c2 = r.getModel(Comment, 2);
+      c3 = r.getModel(Comment, 3);
+
+      expect(c1?.post?.id).toBe(1);
+      expect(c1?.post?.record.title).toBe('post 1 edited');
+      expect(c2?.post?.id).toBe(1);
+      expect(c2?.post?.record.title).toBe('post 1 edited');
+      expect(c3?.post?.id).toBe(1);
+      expect(c3?.post?.record.title).toBe('post 1 edited');
+    });
+
+    it('updates existing many-to-many relations not specified in the data', () => {
+      let r = new Repo()
+        .upsert(Category, [
+          {id: 1, name: 'cat 1'},
+          {id: 2, name: 'cat 2'},
+          {id: 3, name: 'cat 3'},
+        ])
+        .upsert(Post, [
+          {
+            id: 1,
+            title: 'post 1',
+            categories: [1, 2],
+          },
+          {
+            id: 2,
+            title: 'post 2',
+            categories: [2],
+          },
+          {
+            id: 3,
+            title: 'post 3',
+            categories: [1, 3],
+          },
+        ]);
+
+      let p1 = r.getModel(Post, 1);
+      let c1 = r.getModel(Category, 1);
+
+      expect(p1).toBeDefined();
+      expect(p1!.categories.map(c => c.record)).toEqual([
+        {id: 1, name: 'cat 1'},
+        {id: 2, name: 'cat 2'},
+      ]);
+      expect(c1).toBeDefined();
+      expect(c1!.posts.map(p => p.record)).toEqual([
+        {id: 1, title: 'post 1'},
+        {id: 3, title: 'post 3'},
+      ]);
+      expect(p1!.categories[0]).toBe(c1);
+      expect(c1!.posts[0]).toBe(p1);
+
+      r = r.upsert(Category, {id: 1, name: 'cat 1 edited'});
+
+      p1 = r.getModel(Post, 1);
+      c1 = r.getModel(Category, 1);
+
+      expect(p1).toBeDefined();
+      expect(p1!.categories.map(c => c.record)).toEqual([
+        {id: 1, name: 'cat 1 edited'},
+        {id: 2, name: 'cat 2'},
+      ]);
+      expect(c1).toBeDefined();
+      expect(c1!.record.name).toBe('cat 1 edited');
+      expect(c1!.posts.map(p => p.record)).toEqual([
+        {id: 1, title: 'post 1'},
+        {id: 3, title: 'post 3'},
+      ]);
+      expect(p1!.categories[0]).toBe(c1);
+      expect(c1!.posts[0]).toBe(p1);
     });
   });
 
