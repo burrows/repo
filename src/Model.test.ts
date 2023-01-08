@@ -112,3 +112,28 @@ describe('Model#set', () => {
     expect(post.dirty).toEqual({title: true, category: true});
   });
 });
+
+describe('Model#setRelated', () => {
+  it('sets the given relation and marks it as dirty', () => {
+    let author = new Author();
+    let comment = new Comment();
+    let post = new Post();
+
+    expect(post.relations.author).toBe(null);
+    expect(post.relations.comments).toEqual([]);
+    expect(post.dirtyRelations).toEqual({});
+    expect(post.isDirty).toBe(false);
+
+    post = post.setRelated('author', author);
+    expect(post.relations.author).toBe(author);
+    expect(post.relations.comments).toEqual([]);
+    expect(post.dirtyRelations).toEqual({author: true});
+    expect(post.isDirty).toBe(true);
+
+    post = post.setRelated('comments', [comment]);
+    expect(post.relations.author).toBe(author);
+    expect(post.relations.comments).toEqual([comment]);
+    expect(post.dirtyRelations).toEqual({author: true, comments: true});
+    expect(post.isDirty).toBe(true);
+  });
+});

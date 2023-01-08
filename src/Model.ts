@@ -96,6 +96,7 @@ interface ModelNewOpts {
   record?: RawRecord;
   errors?: Errors;
   dirty?: {[attr: string]: boolean};
+  dirtyRelations?: {[relation: string]: boolean};
   relations?: Relations;
   validate?: boolean;
 }
@@ -192,12 +193,14 @@ export default class Model<R extends BaseRecord = {id: number}> {
   relations: Relations;
   errors: Errors;
   dirty: {[attr: string]: boolean};
+  dirtyRelations: {[relation: string]: boolean};
 
   constructor({
     state = 'new',
     record,
     errors = {},
     dirty = {},
+    dirtyRelations = {},
     relations,
     validate = true,
   }: ModelNewOpts = {}) {
@@ -217,6 +220,7 @@ export default class Model<R extends BaseRecord = {id: number}> {
     this.record = rec;
     this.errors = errors;
     this.dirty = dirty;
+    this.dirtyRelations = dirtyRelations;
     this.relations = relations || this.defaultRelations();
   }
 
@@ -251,7 +255,10 @@ export default class Model<R extends BaseRecord = {id: number}> {
   }
 
   get isDirty(): boolean {
-    return Object.keys(this.dirty).length > 0;
+    return (
+      Object.keys(this.dirty).length > 0 ||
+      Object.keys(this.dirtyRelations).length > 0
+    );
   }
 
   set(record: Partial<R>): this {
@@ -266,11 +273,23 @@ export default class Model<R extends BaseRecord = {id: number}> {
     });
   }
 
+  // FIXME: can we improve the typing here?
+  setRelated(relation: string, value: Model[] | Model | null): this {
+    return this.update({
+      relations: {
+        ...this.relations,
+        [relation]: value,
+      },
+      dirtyRelations: {...this.dirtyRelations, [relation]: true},
+    });
+  }
+
   update({
     state = this.state,
     record,
     errors = this.errors,
     dirty = this.dirty,
+    dirtyRelations = this.dirtyRelations,
     relations = this.relations,
   }: ModelUpdateOpts = {}): this {
     return new this.ctor({
@@ -278,6 +297,7 @@ export default class Model<R extends BaseRecord = {id: number}> {
       record: (record || this.record) as RawRecord,
       errors,
       dirty,
+      dirtyRelations,
       relations,
       validate: record !== this.record,
     });
