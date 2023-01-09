@@ -138,6 +138,11 @@ const defaultRecord = (schema: any): any => {
       );
     }
 
+    if (prop.const) {
+      a[k] = prop.const;
+      continue;
+    }
+
     if (prop.default) {
       a[k] = prop.default;
       continue;
