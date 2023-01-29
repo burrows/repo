@@ -137,3 +137,15 @@ describe('Model#setRelated', () => {
     expect(post.isDirty).toBe(true);
   });
 });
+
+describe('Model#dirtyRecord', () => {
+  it('returns an object containing the dirty record attributes', () => {
+    let post = new Post();
+
+    expect(post.dirtyRecord).toEqual({});
+    post = post.set({title: 'xyz'});
+    expect(post.dirtyRecord).toEqual({title: 'xyz'});
+    post = post.set({category: 'sports'});
+    expect(post.dirtyRecord).toEqual({title: 'xyz', category: 'sports'});
+  });
+});

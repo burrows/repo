@@ -266,6 +266,13 @@ export default class Model<R extends BaseRecord = {id: number}> {
     );
   }
 
+  get dirtyRecord(): Partial<R> {
+    return Object.keys(this.dirty).reduce((acc, k) => {
+      acc[k as keyof R] = this.record[k as keyof R];
+      return acc;
+    }, {} as Partial<R>);
+  }
+
   set(record: Partial<R>): this {
     const dirty = Object.keys(record).reduce((acc, attr) => {
       acc[attr] = true;
