@@ -304,7 +304,8 @@ export default class Model<R extends BaseRecord = {id: number}> {
       dirty,
       dirtyRelations,
       relations,
-      validate: record !== this.record,
+      // don't validate if we haven't updated the record or the record is dirty
+      validate: record !== this.record && Object.keys(dirty).length === 0,
     });
   }
 
