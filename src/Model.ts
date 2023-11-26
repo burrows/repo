@@ -1,7 +1,7 @@
-import Ajv, {Schema} from 'ajv';
+import Ajv, { Schema } from 'ajv';
 import ajvFormats from 'ajv-formats';
 
-const ajv = new Ajv({allErrors: true});
+const ajv = new Ajv({ allErrors: true });
 ajvFormats(ajv);
 
 export type RawRecord = Record<string, unknown>;
@@ -24,10 +24,10 @@ export interface Mapper {
 
   query(
     options?: Options,
-    paging?: {page: number; pageSize?: number},
+    paging?: { page: number; pageSize?: number }
   ): Promise<{
     records: RawRecord[];
-    paging?: {page: number; pageSize: number; count: number};
+    paging?: { page: number; pageSize: number; count: number };
   }>;
 
   create(model: Model, options?: Options): Promise<RawRecord>;
@@ -40,37 +40,37 @@ export interface Mapper {
 export const NullMapper: Mapper = {
   fetch(_id: number | string, _options: Options = {}): Promise<RawRecord> {
     throw new Error(
-      'Mapper.get not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+      'Mapper.fetch not defined: set the static mapper property on your model to an object that implements the Mapper interface'
     );
   },
 
   query(
     _options: Options,
-    _paging?: {page: number; pageSize?: number},
+    _paging?: { page: number; pageSize?: number }
   ): Promise<{
     records: RawRecord[];
-    paging?: {page: number; pageSize: number; count: number};
+    paging?: { page: number; pageSize: number; count: number };
   }> {
     throw new Error(
-      'Mapper.query not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+      'Mapper.query not defined: set the static mapper property on your model to an object that implements the Mapper interface'
     );
   },
 
   create(_model: Model, _options: Options = {}): Promise<RawRecord> {
     throw new Error(
-      'Mapper.create not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+      'Mapper.create not defined: set the static mapper property on your model to an object that implements the Mapper interface'
     );
   },
 
   update(_model: Model, _options: Options = {}): Promise<RawRecord> {
     throw new Error(
-      'Mapper.update not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+      'Mapper.update not defined: set the static mapper property on your model to an object that implements the Mapper interface'
     );
   },
 
   delete(_model: Model, _options: Options = {}): Promise<void> {
     throw new Error(
-      'Mapper.delete not defined: set the static mapper property on your model to an object that implements the Mapper interface',
+      'Mapper.delete not defined: set the static mapper property on your model to an object that implements the Mapper interface'
     );
   },
 };
@@ -95,8 +95,8 @@ interface ModelNewOpts {
   state?: ModelState;
   record?: RawRecord;
   errors?: Errors;
-  dirty?: {[attr: string]: boolean};
-  dirtyRelations?: {[relation: string]: boolean};
+  dirty?: { [attr: string]: boolean };
+  dirtyRelations?: { [relation: string]: boolean };
   relations?: Relations;
   validate?: boolean;
 }
@@ -134,7 +134,7 @@ const defaultRecord = (schema: any): any => {
 
     if (!prop) {
       throw new Error(
-        `Model.defaultRecord: missing property definition for property \`${k}\``,
+        `Model.defaultRecord: missing property definition for property \`${k}\``
       );
     }
 
@@ -152,7 +152,7 @@ const defaultRecord = (schema: any): any => {
 
     if (!type) {
       throw new Error(
-        `Model.defaultRecord: property \`${k}\` is missing a type`,
+        `Model.defaultRecord: property \`${k}\` is missing a type`
       );
     }
 
@@ -188,17 +188,17 @@ const defaultRecord = (schema: any): any => {
   return a;
 };
 
-export default class Model<R extends BaseRecord = {id: number}> {
+export default class Model<R extends BaseRecord = { id: number }> {
   static relations: ModelClass<Model>['relations'] = {};
   static mapper: Mapper = NullMapper;
-  static schema: Schema = {type: 'object'};
+  static schema: Schema = { type: 'object' };
 
   state: ModelState;
   record: R;
   relations: Relations;
   errors: Errors;
-  dirty: {[attr: string]: boolean};
-  dirtyRelations: {[relation: string]: boolean};
+  dirty: { [attr: string]: boolean };
+  dirtyRelations: { [relation: string]: boolean };
 
   constructor({
     state = 'new',
@@ -209,13 +209,13 @@ export default class Model<R extends BaseRecord = {id: number}> {
     relations,
     validate = true,
   }: ModelNewOpts = {}) {
-    const rec = {...defaultRecord(this.ctor.schema), ...record} as R;
+    const rec = { ...defaultRecord(this.ctor.schema), ...record } as R;
 
     if (validate) {
       const validator = ajv.compile(this.ctor.schema);
       if (!validator(rec)) {
         const msg = `${this.name}: record failed validation: ${ajv.errorsText(
-          validator.errors,
+          validator.errors
         )}`;
         throw new Error(msg);
       }
@@ -277,11 +277,11 @@ export default class Model<R extends BaseRecord = {id: number}> {
     const dirty = Object.keys(record).reduce((acc, attr) => {
       acc[attr] = true;
       return acc;
-    }, {} as {[attr: string]: boolean});
+    }, {} as { [attr: string]: boolean });
 
     return this.update({
-      record: {...this.record, ...record},
-      dirty: {...this.dirty, ...dirty},
+      record: { ...this.record, ...record },
+      dirty: { ...this.dirty, ...dirty },
     });
   }
 
@@ -292,7 +292,7 @@ export default class Model<R extends BaseRecord = {id: number}> {
         ...this.relations,
         [relation]: value,
       },
-      dirtyRelations: {...this.dirtyRelations, [relation]: true},
+      dirtyRelations: { ...this.dirtyRelations, [relation]: true },
     });
   }
 
